@@ -115,17 +115,15 @@
     </style>
 </head>
 <body>
-        <div class="header-info">
+    <div class="header-info">
         <h1 id="tituloReporte">Reporte de Criptomonedas v1.1.1</h1>
         <div class="user-info">
             <p>Usuario: <span id="currentUser"></span></p>
             <p>Fecha y Hora (UTC): <span id="currentDateTime"></span></p>
         </div>
     </div>
-
     <p id="cargandoDatos">Cargando datos...</p>
     <div id="errorMessage" style="display:none;color:red;font-weight:bold;"></div>
-
     <form class="selector" id="consultaForm">
         <fieldset>
             <legend>Búsqueda y Selección de Mercado</legend>
@@ -177,13 +175,12 @@
             <button type="submit">Consultar</button>
             <button type="button" id="buscarMaximos" style="display:none;">Buscar Pares en Máximos</button>
             <button type="button" id="exportarCSV">Exportar CSV</button>
+            <button type="button" id="analizarMetricas" style="display:none;">Analizar Métricas</button>
         </fieldset>
     </form>
-
     <div id="resultados">
         <p id="progresoPorcentual">0%</p>
         <p id="totalPares">Total de pares procesados: 0, Total de pares válidos: 0</p>
-
         <table id="dataTable">
             <thead>
                 <tr>
@@ -202,12 +199,21 @@
             <tbody></tbody>
         </table>
     </div>
-
+    <div id="seccionMetricas" style="display:none; padding:10px; background:#e9e9e9; margin-top:20px;">
+        <h2>Selecciona el periodo para las métricas</h2>
+        <form id="formMetricas">
+            <label><input type="radio" name="rsi_period" value="14" checked> Periodo 14</label><br>
+            <label><input type="radio" name="rsi_period" value="39"> Periodo 39</label><br>
+            <label><input type="radio" name="rsi_period" value="60"> Periodo 60</label><br>
+            <label><input type="radio" name="rsi_period" value="100"> Periodo 100</label><br>
+            <label><input type="radio" name="rsi_period" value="200"> Periodo 200</label><br>
+            <button type="button" id="calcularMetricas">Calcular</button>
+        </form>
+    </div>
     <script>
         const VERSION = '1.1.1';
         let currentUser = 'gustavojavier7';
         let currentDateTime = new Date().toISOString().replace('T', ' ').slice(0, 19);
-
         const API_ENDPOINTS = {
             SPOT: {
                 EXCHANGE_INFO: 'https://data-api.binance.vision/api/v3/exchangeInfo',
@@ -224,7 +230,6 @@
                 OPEN_INTEREST_HISTORY: 'https://fapi.binance.com/futures/data/openInterestHist'
             }
         };
-
         function getApiUrl(market, action, pair, interval) {
             switch(action) {
                 case 'marketData':
@@ -242,7 +247,6 @@
                     throw new Error('Tipo de acción no válida');
             }
         }
-
         document.addEventListener('DOMContentLoaded', () => {
             const filtroInput = document.getElementById('filtro');
             const marketSelect = document.getElementById('marketSelect');
@@ -257,39 +261,34 @@
             const progresoPorcentual = document.getElementById('progresoPorcentual');
             const totalPares = document.getElementById('totalPares');
             const buscarMaximosButton = document.getElementById('buscarMaximos');
-            const exportarCSVButton = document.getElementById('exportarCSV'); // Nuevo botón
-
+            const exportarCSVButton = document.getElementById('exportarCSV');
+            const analizarMetricasButton = document.getElementById('analizarMetricas');
             let spotPares = [];
             let futurosPares = [];
             let sortOrder = 1;
             let sortColumn = null;
             let isMaximosMode = false;
-
+            let datosRaw = []; // Variable global para almacenar datos de velas
             document.getElementById('currentUser').textContent = currentUser;
             document.getElementById('currentDateTime').textContent = currentDateTime;
-
             function mostrarCargando() {
                 cargandoDatos.style.display = 'block';
                 errorMessage.style.display = 'none';
             }
-
             function ocultarCargando() {
                 cargandoDatos.style.display = 'none';
             }
-
             function mostrarError(mensaje) {
                 errorMessage.textContent = mensaje;
                 errorMessage.style.display = 'block';
                 ocultarCargando();
             }
-
             function generarCodigoUnico() {
                 const ahora = new Date();
                 const timestamp = ahora.getTime();
                 const codigo = timestamp.toString().padStart(16, '0');
                 return `${codigo.slice(0, 4)}-${codigo.slice(4, 8)}-${codigo.slice(8, 12)}-${codigo.slice(12, 16)}`;
             }
-
             function formatearTituloReporte(tipoReporte, par, timeframe, codigoUnico, action = '') {
                 let titulo;
                 if (action === 'candles') {
@@ -303,39 +302,34 @@
                 }
                 return titulo.replace(/ /g, '_');
             }
-
             function actualizarTitulo(tipoReporte, par, timeframe, codigoUnico, action) {
                 const nuevoTitulo = formatearTituloReporte(tipoReporte, par, timeframe, codigoUnico, action);
                 document.getElementById('tituloReporte').textContent = nuevoTitulo;
                 document.title = nuevoTitulo;
             }
-
             consultaForm.addEventListener('submit', async (event) => {
                 event.preventDefault();
                 const nuevoCodigoUnico = generarCodigoUnico();
                 currentDateTime = new Date().toISOString().replace('T', ' ').slice(0, 19);
                 document.getElementById('currentDateTime').textContent = currentDateTime;
-
                 mostrarCargando();
                 dataTable.innerHTML = '';
                 isMaximosMode = false;
-
                 let par = parSelect.value;
                 const action = actionSelect.value;
                 const intervalo = intervalSelect.value;
-
                 try {
                     const tipoReporte = determinarTipoReporte(action);
                     const datos = await realizarConsulta(par, action, intervalo);
                     procesarDatos(datos, action, par);
                     actualizarTitulo(tipoReporte, par, intervalo, nuevoCodigoUnico, action);
                     ocultarCargando();
+                    analizarMetricasButton.style.display = action === 'candles' ? 'inline-block' : 'none';
                 } catch (error) {
                     console.error('Error en la consulta:', error);
                     mostrarError(`Error: ${error.message}`);
                 }
             });
-
             function determinarTipoReporte(action) {
                 switch(action) {
                     case 'candles':
@@ -350,16 +344,13 @@
                         return 'Reporte';
                 }
             }
-
             function procesarDatos(datos, action, par) {
                 dataTable.innerHTML = '';
                 let total = Array.isArray(datos) ? datos.length : 1;
                 let progreso = 0;
                 let paresProcesados = 0;
                 let paresValidosCount = 0;
-
                 actualizarEncabezados(action);
-
                 if (action === 'marketData') {
                     if (!Array.isArray(datos)) datos = [datos];
                     datos.forEach((dato, index) => {
@@ -394,6 +385,7 @@
                     progresoPorcentual.textContent = '100%';
                     totalPares.textContent = `Total de pares procesados: 1, Total de pares válidos: 1`;
                 } else if (action === 'candles') {
+                    datosRaw = datos; // Almacenar datos raw para análisis
                     datos.reverse().forEach((vela, index) => {
                         paresProcesados++;
                         paresValidosCount++;
@@ -428,7 +420,6 @@
                     totalPares.textContent = `Total de pares procesados: 1, Total de pares válidos: 1`;
                 }
             }
-
             async function realizarConsulta(par, action, intervalo) {
                 let url;
                 if (!par && action !== 'marketData') {
@@ -447,7 +438,6 @@
                 }
                 return await response.json();
             }
-
             function actualizarEncabezados(action) {
                 const thead = document.getElementById('dataTable').getElementsByTagName('thead')[0];
                 thead.innerHTML = '';
@@ -495,7 +485,6 @@
                     `;
                 }
             }
-
             function formatearFecha(timestamp) {
                 const fecha = new Date(timestamp);
                 const dia = String(fecha.getDate()).padStart(2, '0');
@@ -506,24 +495,19 @@
                 const segundos = String(fecha.getSeconds()).padStart(2, '0');
                 return `${dia}-${mes}-${anio} ${horas}:${minutos}:${segundos}`;
             }
-
-            // Nueva función para exportar a CSV
             function exportarTablaCSV() {
                 const table = document.getElementById('dataTable');
                 const rows = Array.from(table.querySelectorAll('tr'));
                 let csvContent = '';
-
                 rows.forEach((row, index) => {
                     const cells = Array.from(row.querySelectorAll('th, td'));
                     const rowData = cells.map(cell => {
                         let text = cell.textContent.trim();
-                        // Eliminar íconos de ordenación de los encabezados
                         if (index === 0) text = text.replace(' ▴▾', '');
                         return `"${text.replace(/"/g, '""')}"`;
                     }).join(',');
                     csvContent += rowData + '\n';
                 });
-
                 const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
                 const link = document.createElement('a');
                 const tituloReporte = document.getElementById('tituloReporte').textContent.replace(/ /g, '_');
@@ -534,10 +518,8 @@
                 link.click();
                 document.body.removeChild(link);
             }
-
             const codigoUnico = generarCodigoUnico();
             actualizarTitulo('Reporte', '', '', codigoUnico);
-
             mostrarCargando();
             Promise.all([
                 fetch(API_ENDPOINTS.SPOT.EXCHANGE_INFO),
@@ -557,14 +539,12 @@
                 console.error('Error al obtener los pares disponibles:', error);
                 mostrarError(`Error al conectar con la API: ${error.message}`);
             });
-
             filtroInput.addEventListener('input', () => {
                 const filtro = filtroInput.value.toUpperCase();
                 Array.from(parSelect.options).forEach(option => {
                     option.style.display = option.value.includes(filtro) ? 'block' : 'none';
                 });
             });
-
             function actualizarListaPares() {
                 parSelect.innerHTML = '';
                 const pares = marketSelect.value === 'spot' ? spotPares : futurosPares;
@@ -575,13 +555,11 @@
                     parSelect.appendChild(option);
                 });
             }
-
             marketSelect.addEventListener('change', () => {
                 actualizarListaPares();
                 filtroInput.dispatchEvent(new Event('input'));
                 buscarMaximosButton.style.display = marketSelect.value === 'futures' && actionSelect.value === 'marketData' ? 'inline-block' : 'none';
             });
-
             actionSelect.addEventListener('change', () => {
                 intervalContainer.style.display = actionSelect.value === 'candles' ? 'inline-block' : 'none';
                 parSelect.disabled = actionSelect.value === 'marketData';
@@ -599,7 +577,6 @@
                 buscarMaximosButton.style.display = marketSelect.value === 'futures' && actionSelect.value === 'marketData' ? 'inline-block' : 'none';
             });
             actionSelect.dispatchEvent(new Event('change'));
-
             buscarMaximosButton.addEventListener('click', () => {
                 const rows = Array.from(dataTable.getElementsByTagName('tr'));
                 rows.sort((a, b) => {
@@ -621,29 +598,23 @@
                 isMaximosMode = true;
                 actualizarEncabezados(actionSelect.value);
             });
-
             window.sortTable = function(columnIndex) {
                 const table = document.getElementById('dataTable');
                 const tbody = table.getElementsByTagName('tbody')[0];
                 const rows = Array.from(tbody.getElementsByTagName('tr'));
-
                 if (sortColumn === columnIndex) {
                     sortOrder *= -1;
                 } else {
                     sortColumn = columnIndex;
                     sortOrder = 1;
                 }
-
                 rows.sort((a, b) => {
                     const aText = a.getElementsByTagName('td')[columnIndex].textContent.trim();
                     const bText = b.getElementsByTagName('td')[columnIndex].textContent.trim();
                     return sortOrder * aText.localeCompare(bText, undefined, { numeric: true });
                 });
-
                 rows.forEach(row => tbody.appendChild(row));
             };
-
-            // Evento para exportar a CSV
             exportarCSVButton.addEventListener('click', () => {
                 if (dataTable.rows.length === 0) {
                     alert('No hay datos para exportar. Por favor, realiza una consulta primero.');
@@ -651,6 +622,173 @@
                 }
                 exportarTablaCSV();
             });
+            // Evento para abrir la sección de métricas
+            analizarMetricasButton.addEventListener('click', () => {
+                if (datosRaw.length === 0) {
+                    alert('No hay datos de velas para analizar.');
+                    return;
+                }
+                document.getElementById('seccionMetricas').style.display = 'block';
+                analizarMetricasButton.style.display = 'none';
+            });
+            // Evento para calcular métricas
+            document.getElementById('calcularMetricas').addEventListener('click', () => {
+                const selectedPeriod = document.querySelector('input[name="rsi_period"]:checked').value;
+                const periodo = parseInt(selectedPeriod);
+                if (datosRaw.length < periodo + 1) {  // +1 para diferencias en RSI/ATR
+                    alert(`No hay suficientes velas (${datosRaw.length}) para un periodo de ${periodo}.`);
+                    return;
+                }
+                try {
+                    const analisis = analizarDatosTecnicos(datosRaw, periodo);
+                    mostrarResultadosAnalisis(analisis);
+                    document.getElementById('seccionMetricas').style.display = 'none';
+                    analizarMetricasButton.style.display = 'inline-block';
+                } catch (error) {
+                    alert(`Error en el análisis: ${error.message}`);
+                }
+            });
+            // Funciones de análisis técnico
+            function calcularRSI(closes, periodo) {
+                if (closes.length < periodo + 1) {
+                    throw new Error(`No hay suficientes datos para RSI de periodo ${periodo}`);
+                }
+                let gains = 0, losses = 0;
+                for (let i = 1; i <= periodo; i++) {
+                    const diff = closes[i] - closes[i - 1];
+                    if (diff > 0) gains += diff;
+                    else losses -= diff;
+                }
+                let avgGain = gains / periodo;
+                let avgLoss = losses / periodo || 1;  // Evitar división por cero
+                let rs = avgGain / avgLoss;
+                let rsi = 100 - (100 / (1 + rs));
+                // Smoothing para el resto
+                for (let i = periodo + 1; i < closes.length; i++) {
+                    const diff = closes[i] - closes[i - 1];
+                    avgGain = (avgGain * (periodo - 1) + (diff > 0 ? diff : 0)) / periodo;
+                    avgLoss = (avgLoss * (periodo - 1) + (diff < 0 ? -diff : 0)) / periodo;
+                    rs = avgGain / avgLoss || 1;
+                    rsi = 100 - (100 / (1 + rs));
+                }
+                return rsi;
+            }
+            function calcularEMAserie(prices, period) {
+                if (prices.length < period) {
+                    throw new Error(`No hay suficientes datos para EMA de periodo ${period}`);
+                }
+                const emaArray = new Array(prices.length);
+                let sum = 0;
+                for (let i = 0; i < period; i++) {
+                    sum += prices[i];
+                }
+                emaArray[period - 1] = sum / period;
+                const multiplier = 2 / (period + 1);
+                for (let i = period; i < prices.length; i++) {
+                    emaArray[i] = (prices[i] * multiplier) + (emaArray[i - 1] * (1 - multiplier));
+                }
+                return emaArray;
+            }
+            function calcularMACD(prices, periodo) {
+                const shortPeriod = Math.round(periodo / 3);
+                const longPeriod = Math.round(periodo / 1.5);
+                const signalPeriod = Math.round(periodo / 4);
+                if (prices.length < longPeriod + signalPeriod) {
+                    throw new Error(`No hay suficientes datos para MACD con periodos ${shortPeriod}/${longPeriod}/${signalPeriod}`);
+                }
+                const emaShort = calcularEMAserie(prices, shortPeriod);
+                const emaLong = calcularEMAserie(prices, longPeriod);
+                const macdLine = [];
+                for (let i = longPeriod - 1; i < prices.length; i++) {
+                    macdLine.push(emaShort[i] - emaLong[i]);
+                }
+                const signalLine = calcularEMAserie(macdLine, signalPeriod);
+                const histogram = [];
+                for (let i = signalPeriod - 1; i < macdLine.length; i++) {
+                    histogram.push(macdLine[i] - signalLine[i]);
+                }
+                return {
+                    macd: macdLine[macdLine.length - 1].toFixed(8),
+                    signal: signalLine[signalLine.length - 1].toFixed(8),
+                    histogram: histogram[histogram.length - 1].toFixed(8),
+                    params: `${shortPeriod}/${longPeriod}/${signalPeriod}`
+                };
+            }
+            function calcularATR(highs, lows, closes, periodo) {
+                if (highs.length < periodo + 1) {
+                    throw new Error(`No hay suficientes datos para ATR de periodo ${periodo}`);
+                }
+                const trs = [];
+                for (let i = 1; i < highs.length; i++) {
+                    const tr = Math.max(
+                        highs[i] - lows[i],
+                        Math.abs(highs[i] - closes[i - 1]),
+                        Math.abs(lows[i] - closes[i - 1])
+                    );
+                    trs.push(tr);
+                }
+                let atr = trs.slice(0, periodo).reduce((sum, v) => sum + v, 0) / periodo;
+                for (let i = periodo; i < trs.length; i++) {
+                    atr = (atr * (periodo - 1) + trs[i]) / periodo;
+                }
+                return atr;
+            }
+            function analizarDatosTecnicos(datos, periodo) {
+                const closes = datos.map(vela => parseFloat(vela[4]));
+                const highs = datos.map(vela => parseFloat(vela[2]));
+                const lows = datos.map(vela => parseFloat(vela[3]));
+                const rsi = calcularRSI(closes, periodo);
+                const ema = calcularEMAserie(closes, periodo)[closes.length - 1];
+                const atr = calcularATR(highs, lows, closes, periodo);
+                const macd = calcularMACD(closes, periodo);
+                const precioMedio = closes.reduce((sum, p) => sum + p, 0) / closes.length;
+                const volatilidadRelativa = (atr / precioMedio) * 100;
+                // Puntos pivote
+                const ultimaVela = datos[datos.length - 1];
+                const open = parseFloat(ultimaVela[1]);
+                const high = parseFloat(ultimaVela[2]);
+                const low = parseFloat(ultimaVela[3]);
+                const close = parseFloat(ultimaVela[4]);
+                const pivot = (high + low + close) / 3;
+                const r1 = (2 * pivot) - low;
+                const r2 = pivot + (high - low);
+                const s1 = (2 * pivot) - high;
+                const s2 = pivot - (high - low);
+                return {
+                    periodo,
+                    rsi: rsi.toFixed(2),
+                    interpretacionRSI: rsi > 70 ? 'Sobrecompra' : rsi < 30 ? 'Sobrevenda' : 'Neutral',
+                    ema: ema.toFixed(8),
+                    atr: atr.toFixed(8),
+                    volatilidadRelativa: volatilidadRelativa.toFixed(2) + '%',
+                    macdLine: macd.macd,
+                    macdSignal: macd.signal,
+                    macdHistogram: macd.histogram,
+                    macdParams: macd.params,
+                    pivot: pivot.toFixed(8),
+                    resistencia1: r1.toFixed(8),
+                    resistencia2: r2.toFixed(8),
+                    soporte1: s1.toFixed(8),
+                    soporte2: s2.toFixed(8)
+                };
+            }
+            function mostrarResultadosAnalisis(analisis) {
+                const resultadosDiv = document.getElementById('resultados');
+                let analisisHTML = '<div id="analisisTecnicos" style="padding:10px; background:#f0f0f0; margin-top:20px;">';
+                analisisHTML += `<h2>Análisis Técnico (Periodo: ${analisis.periodo})</h2>`;
+                analisisHTML += `<p>RSI: ${analisis.rsi} (${analisis.interpretacionRSI})</p>`;
+                analisisHTML += `<p>EMA: ${analisis.ema}</p>`;
+                analisisHTML += `<p>ATR: ${analisis.atr}</p>`;
+                analisisHTML += `<p>Volatilidad Relativa: ${analisis.volatilidadRelativa}</p>`;
+                analisisHTML += `<p>MACD (Params: ${analisis.macdParams}): Line ${analisis.macdLine} | Signal ${analisis.macdSignal} | Histogram ${analisis.macdHistogram}</p>`;
+                analisisHTML += `<p>Punto Pivote: ${analisis.pivot}</p>`;
+                analisisHTML += `<p>Resistencia 1: ${analisis.resistencia1} | Resistencia 2: ${analisis.resistencia2}</p>`;
+                analisisHTML += `<p>Soporte 1: ${analisis.soporte1} | Soporte 2: ${analisis.soporte2}</p>`;
+                analisisHTML += '</div>';
+                const existing = document.getElementById('analisisTecnicos');
+                if (existing) existing.remove();
+                resultadosDiv.insertAdjacentHTML('beforeend', analisisHTML);
+            }
         });
     </script>
 </body>

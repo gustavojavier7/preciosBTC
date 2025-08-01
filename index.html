@@ -70,10 +70,20 @@
             color: red;
             display: none;
         }
-        #error {
+        #errorMessage {
             font-weight: bold;
             color: red;
             display: none;
+        }
+        fieldset {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        fieldset.actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
         }
         .header-info {
             padding: 10px;
@@ -105,7 +115,7 @@
     </style>
 </head>
 <body>
-    <div class="header-info">
+        <div class="header-info">
         <h1 id="tituloReporte">Reporte de Criptomonedas v1.1.1</h1>
         <div class="user-info">
             <p>Usuario: <span id="currentUser"></span></p>
@@ -114,46 +124,66 @@
     </div>
 
     <p id="cargandoDatos">Cargando datos...</p>
-    <p id="error">Error al cargar los datos. Por favor, inténtalo de nuevo más tarde.</p>
+    <div id="errorMessage" style="display:none;color:red;font-weight:bold;"></div>
 
     <form class="selector" id="consultaForm">
-        <input type="text" id="filtro" placeholder="Filtrar..." autocomplete="off">
-        <select id="parSelect"></select>
-        <select id="accionSelect">
-            <option value="tickers">Precios (SPOT)</option>
-            <option value="klines">Velas (SPOT)</option>
-            <option value="market">Datos de Mercado (SPOT)</option>
-            <option value="tickers_futuros">Precios (FUTUROS)</option>
-            <option value="klines_futuros">Velas (FUTUROS)</option>
-            <option value="market_futuros">Datos de Mercado (FUTUROS)</option>
-            <option value="open_interest">Interés Abierto Actual (FUTUROS)</option>
-            <option value="open_interest_history">Historial de Interés Abierto (FUTUROS)</option>
-        </select>
-        <select id="intervaloSelect" style="display: none;">
-            <option value="1m">1 minuto</option>
-            <option value="3m">3 minutos</option>
-            <option value="5m">5 minutos</option>
-            <option value="15m">15 minutos</option>
-            <option value="30m">30 minutos</option>
-            <option value="1h" selected>1 hora</option>
-            <option value="2h">2 horas</option>
-            <option value="4h">4 horas</option>
-            <option value="6h">6 horas</option>
-            <option value="8h">8 horas</option>
-            <option value="12h">12 horas</option>
-            <option value="1d">1 día</option>
-            <option value="3d">3 días</option>
-            <option value="1w">1 semana</option>
-            <option value="1M">1 mes</option>
-        </select>
-        <button type="submit">Consultar</button>
-        <button type="button" id="buscarMaximos" style="display: none;">Buscar Pares en Máximos</button>
-        <button type="button" id="exportarCSV">Exportar a CSV</button> <!-- Botón añadido -->
+        <fieldset>
+            <legend>Búsqueda y Selección de Mercado</legend>
+            <input type="text" id="filtro" placeholder="Filtrar..." autocomplete="off">
+            <label for="marketSelect">Mercado:</label>
+            <select id="marketSelect">
+                <option value="spot">Spot</option>
+                <option value="futures">Futuros</option>
+            </select>
+        </fieldset>
+        <fieldset>
+            <legend>Selección de Par</legend>
+            <select id="parSelect"></select>
+        </fieldset>
+        <fieldset>
+            <legend>Tipo de Consulta</legend>
+            <select id="actionSelect">
+                <option value="price">Precio actual</option>
+                <option value="candles">Velas históricas</option>
+                <option value="marketData">Datos de mercado</option>
+                <option value="openInterest">Interés abierto</option>
+            </select>
+        </fieldset>
+        <fieldset>
+            <legend>Parámetros adicionales</legend>
+            <div id="intervalContainer" style="display:none;">
+                <label for="intervalSelect">Intervalo:</label>
+                <select id="intervalSelect">
+                    <option value="1m">1 minuto</option>
+                    <option value="3m">3 minutos</option>
+                    <option value="5m">5 minutos</option>
+                    <option value="15m">15 minutos</option>
+                    <option value="30m">30 minutos</option>
+                    <option value="1h" selected>1 hora</option>
+                    <option value="2h">2 horas</option>
+                    <option value="4h">4 horas</option>
+                    <option value="6h">6 horas</option>
+                    <option value="8h">8 horas</option>
+                    <option value="12h">12 horas</option>
+                    <option value="1d">1 día</option>
+                    <option value="3d">3 días</option>
+                    <option value="1w">1 semana</option>
+                    <option value="1M">1 mes</option>
+                </select>
+            </div>
+        </fieldset>
+        <fieldset class="actions">
+            <legend>Acciones</legend>
+            <button type="submit">Consultar</button>
+            <button type="button" id="buscarMaximos" style="display:none;">Buscar Pares en Máximos</button>
+            <button type="button" id="exportarCSV">Exportar CSV</button>
+        </fieldset>
     </form>
 
     <div id="resultados">
         <p id="progresoPorcentual">0%</p>
         <p id="totalPares">Total de pares procesados: 0, Total de pares válidos: 0</p>
+
         <table id="dataTable">
             <thead>
                 <tr>
@@ -195,15 +225,34 @@
             }
         };
 
+        function getApiUrl(market, action, pair, interval) {
+            switch(action) {
+                case 'marketData':
+                    return market === 'spot' ? API_ENDPOINTS.SPOT.MARKET : API_ENDPOINTS.FUTURES.MARKET;
+                case 'price':
+                    return market === 'spot'
+                        ? `${API_ENDPOINTS.SPOT.TICKER}?symbol=${pair}`
+                        : `${API_ENDPOINTS.FUTURES.TICKER}?symbol=${pair}`;
+                case 'candles':
+                    const base = market === 'spot' ? API_ENDPOINTS.SPOT.KLINES : API_ENDPOINTS.FUTURES.KLINES;
+                    return `${base}?symbol=${pair}&interval=${interval}&limit=1000`;
+                case 'openInterest':
+                    return `${API_ENDPOINTS.FUTURES.OPEN_INTEREST}?symbol=${pair}`;
+                default:
+                    throw new Error('Tipo de acción no válida');
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             const filtroInput = document.getElementById('filtro');
+            const marketSelect = document.getElementById('marketSelect');
             const parSelect = document.getElementById('parSelect');
-            const accionSelect = document.getElementById('accionSelect');
-            const intervaloSelect = document.getElementById('intervaloSelect');
+            const actionSelect = document.getElementById('actionSelect');
+            const intervalSelect = document.getElementById('intervalSelect');
             const consultaForm = document.getElementById('consultaForm');
             const dataTable = document.getElementById('dataTable').getElementsByTagName('tbody')[0];
             const cargandoDatos = document.getElementById('cargandoDatos');
-            const errorMessage = document.getElementById('error');
+            const errorMessage = document.getElementById('errorMessage');
             const tituloReporte = document.getElementById('tituloReporte');
             const progresoPorcentual = document.getElementById('progresoPorcentual');
             const totalPares = document.getElementById('totalPares');
@@ -241,22 +290,22 @@
                 return `${codigo.slice(0, 4)}-${codigo.slice(4, 8)}-${codigo.slice(8, 12)}-${codigo.slice(12, 16)}`;
             }
 
-            function formatearTituloReporte(tipoReporte, par, timeframe, codigoUnico, accion = '') {
+            function formatearTituloReporte(tipoReporte, par, timeframe, codigoUnico, action = '') {
                 let titulo;
-                if (accion && (accion === 'klines' || accion === 'klines_futuros')) {
+                if (action === 'candles') {
                     titulo = `${par}${timeframe ? `_${timeframe}` : ''}_${codigoUnico}`;
                 } else {
                     titulo = `${tipoReporte}`;
-                    if (par && accion !== 'market' && accion !== 'market_futuros') titulo += `+${par}`;
-                    if (timeframe && (accion === 'klines' || accion === 'klines_futuros')) titulo += `+${timeframe}`;
+                    if (par && action !== 'marketData') titulo += `+${par}`;
+                    if (timeframe && action === 'candles') titulo += `+${timeframe}`;
                     if (codigoUnico) titulo += `+${codigoUnico}`;
                     titulo += `+${currentUser}`;
                 }
                 return titulo.replace(/ /g, '_');
             }
 
-            function actualizarTitulo(tipoReporte, par, timeframe, codigoUnico, accion) {
-                const nuevoTitulo = formatearTituloReporte(tipoReporte, par, timeframe, codigoUnico, accion);
+            function actualizarTitulo(tipoReporte, par, timeframe, codigoUnico, action) {
+                const nuevoTitulo = formatearTituloReporte(tipoReporte, par, timeframe, codigoUnico, action);
                 document.getElementById('tituloReporte').textContent = nuevoTitulo;
                 document.title = nuevoTitulo;
             }
@@ -272,14 +321,14 @@
                 isMaximosMode = false;
 
                 let par = parSelect.value;
-                const accion = accionSelect.value;
-                const intervalo = intervaloSelect.value;
+                const action = actionSelect.value;
+                const intervalo = intervalSelect.value;
 
                 try {
-                    const tipoReporte = determinarTipoReporte(accion);
-                    const datos = await realizarConsulta(par, accion, intervalo);
-                    procesarDatos(datos, accion, par);
-                    actualizarTitulo(tipoReporte, par, intervalo, nuevoCodigoUnico, accion);
+                    const tipoReporte = determinarTipoReporte(action);
+                    const datos = await realizarConsulta(par, action, intervalo);
+                    procesarDatos(datos, action, par);
+                    actualizarTitulo(tipoReporte, par, intervalo, nuevoCodigoUnico, action);
                     ocultarCargando();
                 } catch (error) {
                     console.error('Error en la consulta:', error);
@@ -287,24 +336,31 @@
                 }
             });
 
-            function determinarTipoReporte(accion) {
-                if (accion.includes('klines')) return 'Velas';
-                if (accion.includes('tickers')) return 'Precios';
-                if (accion.includes('market')) return 'Datos de Mercado';
-                if (accion.includes('open_interest')) return 'Interés Abierto';
-                return 'Reporte';
+            function determinarTipoReporte(action) {
+                switch(action) {
+                    case 'candles':
+                        return 'Velas';
+                    case 'price':
+                        return 'Precios';
+                    case 'marketData':
+                        return 'Datos de Mercado';
+                    case 'openInterest':
+                        return 'Interés Abierto';
+                    default:
+                        return 'Reporte';
+                }
             }
 
-            function procesarDatos(datos, accion, par) {
+            function procesarDatos(datos, action, par) {
                 dataTable.innerHTML = '';
                 let total = Array.isArray(datos) ? datos.length : 1;
                 let progreso = 0;
                 let paresProcesados = 0;
                 let paresValidosCount = 0;
 
-                actualizarEncabezados(accion);
+                actualizarEncabezados(action);
 
-                if (accion === 'market' || accion === 'market_futuros') {
+                if (action === 'marketData') {
                     if (!Array.isArray(datos)) datos = [datos];
                     datos.forEach((dato, index) => {
                         if (spotPares.includes(dato.symbol) || futurosPares.includes(dato.symbol)) {
@@ -328,7 +384,7 @@
                         progresoPorcentual.textContent = `${progreso}%`;
                         totalPares.textContent = `Total de pares procesados: ${paresProcesados}, Total de pares válidos: ${paresValidosCount}`;
                     });
-                } else if (accion === 'tickers' || accion === 'tickers_futuros') {
+                } else if (action === 'price') {
                     const row = dataTable.insertRow();
                     row.innerHTML = `
                         <td>${datos.symbol}</td>
@@ -337,7 +393,7 @@
                     `;
                     progresoPorcentual.textContent = '100%';
                     totalPares.textContent = `Total de pares procesados: 1, Total de pares válidos: 1`;
-                } else if (accion === 'klines' || accion === 'klines_futuros') {
+                } else if (action === 'candles') {
                     datos.reverse().forEach((vela, index) => {
                         paresProcesados++;
                         paresValidosCount++;
@@ -361,7 +417,7 @@
                         progresoPorcentual.textContent = `${progreso}%`;
                         totalPares.textContent = `Total de pares procesados: ${paresProcesados}, Total de pares válidos: ${paresValidosCount}`;
                     });
-                } else if (accion === 'open_interest') {
+                } else if (action === 'openInterest') {
                     const row = dataTable.insertRow();
                     row.innerHTML = `
                         <td>${datos.symbol}</td>
@@ -370,65 +426,21 @@
                     `;
                     progresoPorcentual.textContent = '100%';
                     totalPares.textContent = `Total de pares procesados: 1, Total de pares válidos: 1`;
-                } else if (accion === 'open_interest_history') {
-                    datos.forEach((dato, index) => {
-                        const row = dataTable.insertRow();
-                        row.innerHTML = `
-                            <td>${dato.symbol}</td>
-                            <td>${parseFloat(dato.sumOpenInterest).toFixed(8)}</td>
-                            <td>${parseFloat(dato.sumOpenInterestValue).toFixed(8)}</td>
-                            <td>${formatearFecha(dato.timestamp)}</td>
-                            <td>${index + 1}</td>
-                        `;
-                        progresoPorcentual.textContent = '100%';
-                        totalPares.textContent = `Total de pares procesados: ${datos.length}, Total de pares válidos: ${datos.length}`;
-                    });
                 }
             }
 
-            async function realizarConsulta(par, accion, intervalo) {
+            async function realizarConsulta(par, action, intervalo) {
                 let url;
-                if (!par && accion !== 'market' && accion !== 'market_futuros') {
+                if (!par && action !== 'marketData') {
                     throw new Error('Debe seleccionar un par antes de consultar.');
                 }
-                if (par && par.endsWith('.P')) {
-                    par = par.slice(0, -2);
-                }
-                if (par && (accion === 'tickers' || accion === 'klines' || accion === 'market') && !spotPares.includes(par)) {
+                if (par && marketSelect.value === 'spot' && !spotPares.includes(par)) {
                     throw new Error('El par seleccionado no está disponible en el mercado SPOT.');
                 }
-                if (par && (accion === 'tickers_futuros' || accion === 'klines_futuros' || accion === 'market_futuros' ||
-                    accion === 'open_interest' || accion === 'open_interest_history') && !futurosPares.includes(par)) {
+                if (par && marketSelect.value === 'futures' && !futurosPares.includes(par)) {
                     throw new Error('El par seleccionado no está disponible en el mercado de Futuros perpetuos.');
                 }
-                switch (accion) {
-                    case 'market':
-                        url = API_ENDPOINTS.SPOT.MARKET;
-                        break;
-                    case 'market_futuros':
-                        url = API_ENDPOINTS.FUTURES.MARKET;
-                        break;
-                    case 'open_interest':
-                        url = `${API_ENDPOINTS.FUTURES.OPEN_INTEREST}?symbol=${par}`;
-                        break;
-                    case 'open_interest_history':
-                        url = `${API_ENDPOINTS.FUTURES.OPEN_INTEREST_HISTORY}?symbol=${par}&period=1d`;
-                        break;
-                    case 'tickers':
-                        url = `${API_ENDPOINTS.SPOT.TICKER}?symbol=${par}`;
-                        break;
-                    case 'tickers_futuros':
-                        url = `${API_ENDPOINTS.FUTURES.TICKER}?symbol=${par}`;
-                        break;
-                    case 'klines':
-                        url = `${API_ENDPOINTS.SPOT.KLINES}?symbol=${par}&interval=${intervalo}&limit=1000`;
-                        break;
-                    case 'klines_futuros':
-                        url = `${API_ENDPOINTS.FUTURES.KLINES}?symbol=${par}&interval=${intervalo}&limit=1000`;
-                        break;
-                    default:
-                        throw new Error('Tipo de acción no válida');
-                }
+                url = getApiUrl(marketSelect.value, action, par, intervalo);
                 const response = await fetch(url);
                 if (!response.ok) {
                     throw new Error('Error al conectar con la API');
@@ -436,14 +448,14 @@
                 return await response.json();
             }
 
-            function actualizarEncabezados(accion) {
+            function actualizarEncabezados(action) {
                 const thead = document.getElementById('dataTable').getElementsByTagName('thead')[0];
                 thead.innerHTML = '';
                 const row = thead.insertRow();
                 const crearEncabezado = (texto, index) => {
                     return `<th onclick="sortTable(${index})">${texto} <span class="sort-icon" data-column="${index}">▴▾</span></th>`;
                 };
-                if (accion === 'market' || accion === 'market_futuros') {
+                if (action === 'marketData') {
                     row.innerHTML = `
                         ${crearEncabezado('Par', 0)}
                         ${crearEncabezado('Precio de Apertura', 1)}
@@ -456,13 +468,13 @@
                         ${crearEncabezado('Timestamp', 8)}
                         ${crearEncabezado('Orden', 9)}
                     `;
-                } else if (accion === 'tickers' || accion === 'tickers_futuros') {
+                } else if (action === 'price') {
                     row.innerHTML = `
                         ${crearEncabezado('Par', 0)}
                         ${crearEncabezado('Precio de Compra', 1)}
                         ${crearEncabezado('Precio de Venta', 2)}
                     `;
-                } else if (accion === 'klines' || accion === 'klines_futuros') {
+                } else if (action === 'candles') {
                     row.innerHTML = `
                         ${crearEncabezado('Par', 0)}
                         ${crearEncabezado('Precio de Apertura', 1)}
@@ -475,18 +487,11 @@
                         ${crearEncabezado('Timestamp', 8)}
                         ${crearEncabezado('Orden', 9)}
                     `;
-                } else if (accion === 'open_interest') {
+                } else if (action === 'openInterest') {
                     row.innerHTML = `
                         ${crearEncabezado('Par', 0)}
                         ${crearEncabezado('Interés Abierto', 1)}
                         ${crearEncabezado('Timestamp', 2)}
-                    `;
-                } else if (accion === 'open_interest_history') {
-                    row.innerHTML = `
-                        ${crearEncabezado('Par', 0)}
-                        ${crearEncabezado('Suma de Interés Abierto', 1)}
-                        ${crearEncabezado('Valor de Interés Abierto', 2)}
-                        ${crearEncabezado('Timestamp', 3)}
                     `;
                 }
             }
@@ -545,16 +550,7 @@
             .then(data => {
                 spotPares = data[0].symbols.filter(symbol => symbol.status === 'TRADING').map(symbol => symbol.symbol);
                 futurosPares = data[1].symbols.filter(symbol => symbol.status === 'TRADING' && symbol.contractType === 'PERPETUAL').map(symbol => symbol.symbol);
-                const paresValidos = [
-                    ...spotPares.map(par => ({ par, mercado: 'SPOT' })),
-                    ...futurosPares.map(par => ({ par: `${par}.P`, mercado: 'FUTUROS' }))
-                ];
-                paresValidos.forEach(({ par, mercado }) => {
-                    const option = document.createElement('option');
-                    option.value = par;
-                    option.textContent = `${par} (${mercado})`;
-                    parSelect.appendChild(option);
-                });
+                actualizarListaPares();
                 ocultarCargando();
             })
             .catch(error => {
@@ -569,12 +565,40 @@
                 });
             });
 
-            accionSelect.addEventListener('change', () => {
-                intervaloSelect.style.display = accionSelect.value === 'klines' || accionSelect.value === 'klines_futuros' ? 'inline-block' : 'none';
-                parSelect.disabled = accionSelect.value === 'market' || accionSelect.value === 'market_futuros';
-                buscarMaximosButton.style.display = accionSelect.value === 'market_futuros' ? 'inline-block' : 'none';
+            function actualizarListaPares() {
+                parSelect.innerHTML = '';
+                const pares = marketSelect.value === 'spot' ? spotPares : futurosPares;
+                pares.forEach(par => {
+                    const option = document.createElement('option');
+                    option.value = par;
+                    option.textContent = par;
+                    parSelect.appendChild(option);
+                });
+            }
+
+            marketSelect.addEventListener('change', () => {
+                actualizarListaPares();
+                filtroInput.dispatchEvent(new Event('input'));
+                buscarMaximosButton.style.display = marketSelect.value === 'futures' && actionSelect.value === 'marketData' ? 'inline-block' : 'none';
             });
-            accionSelect.dispatchEvent(new Event('change'));
+
+            actionSelect.addEventListener('change', () => {
+                intervalContainer.style.display = actionSelect.value === 'candles' ? 'inline-block' : 'none';
+                parSelect.disabled = actionSelect.value === 'marketData';
+                if (actionSelect.value === 'openInterest') {
+                    if (marketSelect.value !== 'futures') {
+                        marketSelect.value = 'futures';
+                        actualizarListaPares();
+                    }
+                    marketSelect.disabled = true;
+                    mostrarError('El interés abierto solo está disponible para Futuros.');
+                } else {
+                    marketSelect.disabled = false;
+                    errorMessage.style.display = 'none';
+                }
+                buscarMaximosButton.style.display = marketSelect.value === 'futures' && actionSelect.value === 'marketData' ? 'inline-block' : 'none';
+            });
+            actionSelect.dispatchEvent(new Event('change'));
 
             buscarMaximosButton.addEventListener('click', () => {
                 const rows = Array.from(dataTable.getElementsByTagName('tr'));
@@ -595,7 +619,7 @@
                     dataTable.appendChild(row);
                 });
                 isMaximosMode = true;
-                actualizarEncabezados(accionSelect.value);
+                actualizarEncabezados(actionSelect.value);
             });
 
             window.sortTable = function(columnIndex) {

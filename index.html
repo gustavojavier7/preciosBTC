@@ -175,8 +175,7 @@
             <button type="submit">Consultar</button>
             <button type="button" id="buscarMaximos" style="display:none;">Buscar Pares en Máximos</button>
             <button type="button" id="exportarCSV">Exportar CSV</button>
-            <button type="button" id="analizarMetricas" style="display:none;">Analizar Métricas</button>
-            <button type="button" id="puntosEntrada" style="display:none;">Puntos de entrada</button>
+            <button type="button" id="calcularResumen" style="display:none;">Calcular Métricas y Puntos de Entrada</button>
         </fieldset>
     </form>
     <div id="resultados">
@@ -200,6 +199,7 @@
             <tbody></tbody>
         </table>
     </div>
+    <div id="resumenContainer" style="display:none; padding:10px; background:#f0f0f0; margin-top:20px;"></div>
     <script>
         const VERSION = '1.1.1';
         let currentUser = 'gustavojavier7';
@@ -252,8 +252,7 @@
             const totalPares = document.getElementById('totalPares');
             const buscarMaximosButton = document.getElementById('buscarMaximos');
             const exportarCSVButton = document.getElementById('exportarCSV');
-            const analizarMetricasButton = document.getElementById('analizarMetricas');
-            const puntosEntradaButton = document.getElementById('puntosEntrada');
+            const calcularResumenButton = document.getElementById('calcularResumen');
             let spotPares = [];
             let futurosPares = [];
             let sortOrder = 1;
@@ -315,8 +314,7 @@
                     procesarDatos(datos, action, par);
                     actualizarTitulo(tipoReporte, par, intervalo, nuevoCodigoUnico, action);
                     ocultarCargando();
-                    analizarMetricasButton.style.display = action === 'candles' ? 'inline-block' : 'none';
-                    puntosEntradaButton.style.display = (marketSelect.value === 'futures' && action === 'candles') ? 'inline-block' : 'none';
+                    calcularResumenButton.style.display = action === 'candles' ? 'inline-block' : 'none';
                 } catch (error) {
                     console.error('Error en la consulta:', error);
                     mostrarError(`Error: ${error.message}`);
@@ -614,238 +612,152 @@
                 }
                 exportarTablaCSV();
             });
-            // Evento para abrir la nueva pestaña con resumen ejecutivo
-            analizarMetricasButton.addEventListener('click', () => {
+
+            function calcularRSI(closes, periodo) {
+                if (closes.length < periodo + 1) return 'N/A';
+                let gains = 0, losses = 0;
+                for (let i = 1; i <= periodo; i++) {
+                    const diff = closes[i] - closes[i - 1];
+                    if (diff > 0) gains += diff; else losses -= diff;
+                }
+                let avgGain = gains / periodo;
+                let avgLoss = losses / periodo || 1;
+                let rs = avgGain / avgLoss;
+                let rsi = 100 - (100 / (1 + rs));
+                for (let i = periodo + 1; i < closes.length; i++) {
+                    const diff = closes[i] - closes[i - 1];
+                    avgGain = (avgGain * (periodo - 1) + (diff > 0 ? diff : 0)) / periodo;
+                    avgLoss = (avgLoss * (periodo - 1) + (diff < 0 ? -diff : 0)) / periodo;
+                    rs = avgGain / avgLoss || 1;
+                    rsi = 100 - (100 / (1 + rs));
+                }
+                return rsi.toFixed(2);
+            }
+            function calcularEMAserie(prices, period) {
+                if (prices.length < period) return 'N/A';
+                const emaArray = new Array(prices.length);
+                let sum = 0;
+                for (let i = 0; i < period; i++) sum += prices[i];
+                emaArray[period - 1] = sum / period;
+                const multiplier = 2 / (period + 1);
+                for (let i = period; i < prices.length; i++) {
+                    emaArray[i] = (prices[i] * multiplier) + (emaArray[i - 1] * (1 - multiplier));
+                }
+                return emaArray;
+            }
+            function calcularMACD(prices, periodo) {
+                const shortPeriod = Math.round(periodo / 3);
+                const longPeriod = Math.round(periodo / 1.5);
+                const signalPeriod = Math.round(periodo / 4);
+                if (prices.length < longPeriod + signalPeriod) return {macd: 'N/A', signal: 'N/A', histogram: 'N/A', params: ''};
+                const emaShort = calcularEMAserie(prices, shortPeriod);
+                const emaLong = calcularEMAserie(prices, longPeriod);
+                const macdLine = [];
+                for (let i = longPeriod - 1; i < prices.length; i++) {
+                    macdLine.push(emaShort[i] - emaLong[i]);
+                }
+                const signalLine = calcularEMAserie(macdLine, signalPeriod);
+                const histogram = [];
+                for (let i = signalPeriod - 1; i < macdLine.length; i++) {
+                    histogram.push(macdLine[i] - signalLine[i]);
+                }
+                return {
+                    macd: macdLine[macdLine.length - 1].toFixed(8),
+                    signal: signalLine[signalLine.length - 1].toFixed(8),
+                    histogram: histogram[histogram.length - 1].toFixed(8),
+                    params: `${shortPeriod}/${longPeriod}/${signalPeriod}`
+                };
+            }
+            function calcularATR(highs, lows, closes, periodo) {
+                if (highs.length < periodo + 1) return 'N/A';
+                const trs = [];
+                for (let i = 1; i < highs.length; i++) {
+                    const tr = Math.max(highs[i] - lows[i], Math.abs(highs[i] - closes[i - 1]), Math.abs(lows[i] - closes[i - 1]));
+                    trs.push(tr);
+                }
+                let atr = trs.slice(0, periodo).reduce((sum, v) => sum + v, 0) / periodo;
+                for (let i = periodo; i < trs.length; i++) {
+                    atr = (atr * (periodo - 1) + trs[i]) / periodo;
+                }
+                return atr.toFixed(8);
+            }
+            function calcularPuntosEntrada(closes, highs, lows) {
+                const mean = closes.reduce((sum, p) => sum + p, 0) / closes.length;
+                const variance = closes.reduce((sum, p) => sum + Math.pow(p - mean, 2), 0) / closes.length;
+                const std = Math.sqrt(variance);
+                const lowPrice = mean - 2 * std;
+                const highPrice = mean + 2 * std;
+                return { long: lowPrice.toFixed(8), short: highPrice.toFixed(8) };
+            }
+            function mostrarResumen(periodo) {
+                const closes = datosRaw.map(v => parseFloat(v[4]));
+                const highs = datosRaw.map(v => parseFloat(v[2]));
+                const lows = datosRaw.map(v => parseFloat(v[3]));
+                const rsi = calcularRSI(closes, periodo);
+                const interpretacionRSI = rsi > 70 ? 'Sobrecompra' : rsi < 30 ? 'Sobrevenda' : 'Neutral';
+                const ema = calcularEMAserie(closes, periodo)[closes.length - 1].toFixed(8);
+                const atr = calcularATR(highs, lows, closes, periodo);
+                const macd = calcularMACD(closes, periodo);
+                const precioMedio = closes.reduce((sum, p) => sum + p, 0) / closes.length;
+                const volatilidadRelativa = ((parseFloat(atr) / precioMedio) * 100).toFixed(2) + '%';
+                const ultimaVela = datosRaw[datosRaw.length - 1];
+                const high = parseFloat(ultimaVela[2]);
+                const low = parseFloat(ultimaVela[3]);
+                const close = parseFloat(ultimaVela[4]);
+                const pivot = ((high + low + close) / 3).toFixed(8);
+                const r1 = ((2 * pivot) - low).toFixed(8);
+                const r2 = (pivot + (high - low)).toFixed(8);
+                const s1 = ((2 * pivot) - high).toFixed(8);
+                const s2 = (pivot - (high - low)).toFixed(8);
+                let puntos = { long: 'N/A', short: 'N/A' };
+                if (marketSelect.value === 'futures') {
+                    const par = parSelect.value;
+                    fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${par}&interval=1d&limit=14`)
+                        .then(res => res.json())
+                        .then(datos14 => {
+                            const closes14 = datos14.map(v => parseFloat(v[4]));
+                            const highs14 = datos14.map(v => parseFloat(v[2]));
+                            const lows14 = datos14.map(v => parseFloat(v[3]));
+                            puntos = calcularPuntosEntrada(closes14, highs14, lows14);
+                            actualizarHTML();
+                        })
+                        .catch(err => console.error(err));
+                } else {
+                    actualizarHTML();
+                }
+                function actualizarHTML() {
+                    const html = `
+                        <h2>Métricas (Periodo: ${periodo})</h2>
+                        <p>RSI: ${rsi} (${interpretacionRSI})</p>
+                        <p>EMA: ${ema}</p>
+                        <p>ATR: ${atr}</p>
+                        <p>Volatilidad Relativa: ${volatilidadRelativa}</p>
+                        <p>MACD (Params: ${macd.params}): Line ${macd.macd} | Signal ${macd.signal} | Histogram ${macd.histogram}</p>
+                        <p>Punto Pivote: ${pivot}</p>
+                        <p>Resistencia 1: ${r1} | Resistencia 2: ${r2}</p>
+                        <p>Soporte 1: ${s1} | Soporte 2: ${s2}</p>
+                        <h2>Puntos de Entrada</h2>
+                        <p>Entrada Long (Compra): ${puntos.long}</p>
+                        <p>Entrada Short (Venta): ${puntos.short}</p>
+                    `;
+                    document.getElementById('resumen').innerHTML = html;
+                }
+                actualizarHTML();
+            }
+            const resumenDiv = document.getElementById('resumenContainer');
+            calcularResumenButton.addEventListener('click', () => {
                 if (datosRaw.length === 0) {
                     alert('No hay datos de velas para analizar.');
                     return;
                 }
-                const newWin = window.open('', '_blank');
-                const datosJson = JSON.stringify(datosRaw);
-                const par = parSelect.value;
-                const market = marketSelect.value;
-                const content = `
-                    <!DOCTYPE html>
-                    <html lang="es">
-                    <head>
-                        <meta charset="UTF-8">
-                        <title>Resumen Ejecutivo de Métricas</title>
-                        <style>
-                            body { font-family: Arial, sans-serif; padding: 20px; }
-                            #resumen { padding: 10px; background: #f0f0f0; margin-top: 20px; }
-                        </style>
-                    </head>
-                    <body>
-                        <h1>Resumen Ejecutivo</h1>
-                        <form id="formMetricas">
-                            <h2>Selecciona el periodo</h2>
-                            <label><input type="radio" name="periodo" value="14" checked> 14</label><br>
-                            <label><input type="radio" name="periodo" value="39"> 39</label><br>
-                            <label><input type="radio" name="periodo" value="60"> 60</label><br>
-                            <label><input type="radio" name="periodo" value="100"> 100</label><br>
-                            <label><input type="radio" name="periodo" value="200"> 200</label><br>
-                            <button type="button" id="calcular">Calcular</button>
-                        </form>
-                        <div id="resumen"></div>
-                        <script>
-                            const datosRaw = ${datosJson};
-                            const market = '${market}';
-                            const par = '${par}';
-                            // Funciones de cálculo (copiar de la ventana principal)
-                            function calcularRSI(closes, periodo) {
-                                if (closes.length < periodo + 1) return 'N/A';
-                                let gains = 0, losses = 0;
-                                for (let i = 1; i <= periodo; i++) {
-                                    const diff = closes[i] - closes[i - 1];
-                                    if (diff > 0) gains += diff;
-                                    else losses -= diff;
-                                }
-                                let avgGain = gains / periodo;
-                                let avgLoss = losses / periodo || 1;
-                                let rs = avgGain / avgLoss;
-                                let rsi = 100 - (100 / (1 + rs));
-                                for (let i = periodo + 1; i < closes.length; i++) {
-                                    const diff = closes[i] - closes[i - 1];
-                                    avgGain = (avgGain * (periodo - 1) + (diff > 0 ? diff : 0)) / periodo;
-                                    avgLoss = (avgLoss * (periodo - 1) + (diff < 0 ? -diff : 0)) / periodo;
-                                    rs = avgGain / avgLoss || 1;
-                                    rsi = 100 - (100 / (1 + rs));
-                                }
-                                return rsi.toFixed(2);
-                            }
-                            function calcularEMAserie(prices, period) {
-                                if (prices.length < period) return 'N/A';
-                                const emaArray = new Array(prices.length);
-                                let sum = 0;
-                                for (let i = 0; i < period; i++) sum += prices[i];
-                                emaArray[period - 1] = sum / period;
-                                const multiplier = 2 / (period + 1);
-                                for (let i = period; i < prices.length; i++) {
-                                    emaArray[i] = (prices[i] * multiplier) + (emaArray[i - 1] * (1 - multiplier));
-                                }
-                                return emaArray;
-                            }
-                            function calcularMACD(prices, periodo) {
-                                const shortPeriod = Math.round(periodo / 3);
-                                const longPeriod = Math.round(periodo / 1.5);
-                                const signalPeriod = Math.round(periodo / 4);
-                                if (prices.length < longPeriod + signalPeriod) return {macd: 'N/A', signal: 'N/A', histogram: 'N/A', params: ''};
-                                const emaShort = calcularEMAserie(prices, shortPeriod);
-                                const emaLong = calcularEMAserie(prices, longPeriod);
-                                const macdLine = [];
-                                for (let i = longPeriod - 1; i < prices.length; i++) {
-                                    macdLine.push(emaShort[i] - emaLong[i]);
-                                }
-                                const signalLine = calcularEMAserie(macdLine, signalPeriod);
-                                const histogram = [];
-                                for (let i = signalPeriod - 1; i < macdLine.length; i++) {
-                                    histogram.push(macdLine[i] - signalLine[i]);
-                                }
-                                return {
-                                    macd: macdLine[macdLine.length - 1].toFixed(8),
-                                    signal: signalLine[signalLine.length - 1].toFixed(8),
-                                    histogram: histogram[histogram.length - 1].toFixed(8),
-                                    params: \`${shortPeriod}/${longPeriod}/${signalPeriod}\`
-                                };
-                            }
-                            function calcularATR(highs, lows, closes, periodo) {
-                                if (highs.length < periodo + 1) return 'N/A';
-                                const trs = [];
-                                for (let i = 1; i < highs.length; i++) {
-                                    const tr = Math.max(highs[i] - lows[i], Math.abs(highs[i] - closes[i - 1]), Math.abs(lows[i] - closes[i - 1]));
-                                    trs.push(tr);
-                                }
-                                let atr = trs.slice(0, periodo).reduce((sum, v) => sum + v, 0) / periodo;
-                                for (let i = periodo; i < trs.length; i++) {
-                                    atr = (atr * (periodo - 1) + trs[i]) / periodo;
-                                }
-                                return atr.toFixed(8);
-                            }
-                            function calcularPuntosEntrada(closes, highs, lows) {
-                                const mean = closes.reduce((sum, p) => sum + p, 0) / closes.length;
-                                const variance = closes.reduce((sum, p) => sum + Math.pow(p - mean, 2), 0) / closes.length;
-                                const std = Math.sqrt(variance);
-                                const lowPrice = mean - 2 * std;
-                                const highPrice = mean + 2 * std;
-                                return { long: lowPrice.toFixed(8), short: highPrice.toFixed(8) };
-                            }
-                            function mostrarResumen(periodo) {
-                                const closes = datosRaw.map(vela => parseFloat(vela[4]));
-                                const highs = datosRaw.map(vela => parseFloat(vela[2]));
-                                const lows = datosRaw.map(vela => parseFloat(vela[3]));
-                                const rsi = calcularRSI(closes, periodo);
-                                const interpretacionRSI = rsi > 70 ? 'Sobrecompra' : rsi < 30 ? 'Sobrevenda' : 'Neutral';
-                                const ema = calcularEMAserie(closes, periodo)[closes.length - 1].toFixed(8);
-                                const atr = calcularATR(highs, lows, closes, periodo);
-                                const macd = calcularMACD(closes, periodo);
-                                const precioMedio = closes.reduce((sum, p) => sum + p, 0) / closes.length;
-                                const volatilidadRelativa = ((parseFloat(atr) / precioMedio) * 100).toFixed(2) + '%';
-                                // Puntos pivote
-                                const ultimaVela = datosRaw[datosRaw.length - 1];
-                                const open = parseFloat(ultimaVela[1]);
-                                const high = parseFloat(ultimaVela[2]);
-                                const low = parseFloat(ultimaVela[3]);
-                                const close = parseFloat(ultimaVela[4]);
-                                const pivot = ((high + low + close) / 3).toFixed(8);
-                                const r1 = ((2 * pivot) - low).toFixed(8);
-                                const r2 = (pivot + (high - low)).toFixed(8);
-                                const s1 = ((2 * pivot) - high).toFixed(8);
-                                const s2 = (pivot - (high - low)).toFixed(8);
-                                // Puntos de entrada (usando 14 días, fetch si necesario, pero para simplicidad, usar datosRaw si es 1d, sino recalcular)
-                                let puntos = { long: 'N/A', short: 'N/A' };
-                                if (market === 'futures') {
-                                    // Asumiendo datosRaw no es 1d, recalcular con fetch
-                                    fetch(\`https://fapi.binance.com/fapi/v1/klines?symbol=${par}&interval=1d&limit=14\`)
-                                    .then(res => res.json())
-                                    .then(datos14 => {
-                                        const closes14 = datos14.map(vela => parseFloat(vela[4]));
-                                        const highs14 = datos14.map(vela => parseFloat(vela[2]));
-                                        const lows14 = datos14.map(vela => parseFloat(vela[3]));
-                                        puntos = calcularPuntosEntrada(closes14, highs14, lows14);
-                                        actualizarHTML();
-                                    })
-                                    .catch(err => console.error(err));
-                                } else {
-                                    actualizarHTML();
-                                }
-                                function actualizarHTML() {
-                                    const html = \`
-                                        <h2>Métricas (Periodo: \${periodo})</h2>
-                                        <p>RSI: \${rsi} (\${interpretacionRSI})</p>
-                                        <p>EMA: \${ema}</p>
-                                        <p>ATR: \${atr}</p>
-                                        <p>Volatilidad Relativa: \${volatilidadRelativa}</p>
-                                        <p>MACD (Params: \${macd.params}): Line \${macd.macd} | Signal \${macd.signal} | Histogram \${macd.histogram}</p>
-                                        <p>Punto Pivote: \${pivot}</p>
-                                        <p>Resistencia 1: \${r1} | Resistencia 2: \${r2}</p>
-                                        <p>Soporte 1: \${s1} | Soporte 2: \${s2}</p>
-                                        <h2>Puntos de Entrada</h2>
-                                        <p>Entrada Long (Compra): \${puntos.long}</p>
-                                        <p>Entrada Short (Venta): \${puntos.short}</p>
-                                    \`;
-                                    document.getElementById('resumen').innerHTML = html;
-                                }
-                                actualizarHTML(); // Inicial para métricas, puntos se actualizan async si necesario
-                            }
-                            document.getElementById('calcular').addEventListener('click', () => {
-                                const periodo = parseInt(document.querySelector('input[name="periodo"]:checked').value);
-                                mostrarResumen(periodo);
-                            });
-                            // Calcular inicial con 14
-                            mostrarResumen(14);
-                        <\/script>
-                    </body>
-                    </html>
+
                 `;
-                newWin.document.write(content);
-                newWin.document.close();
+                mostrarResumen(14);
+                resumenDiv.querySelector('#recalcularResumen').addEventListener('click', () => {
+                    const periodo = parseInt(resumenDiv.querySelector('input[name="periodo"]:checked').value);
+                    mostrarResumen(periodo);
+                });
             });
-            // Evento para calcular puntos de entrada (mantiene el anterior)
-            puntosEntradaButton.addEventListener('click', async () => {
-    mostrarCargando();
-    try {
-        const par = parSelect.value;
-        const url = getApiUrl('futures', 'candles', par, '1d', 14);
-        const datos = await fetch(url).then(res => res.json());
-        if (datos.length < 14) {
-            throw new Error('No hay suficientes datos históricos (14 días requeridos).');
-        }
-        const closes = datos.map(vela => parseFloat(vela[4]));
-        const highs = datos.map(vela => parseFloat(vela[2]));
-        const lows = datos.map(vela => parseFloat(vela[3]));
-        const mean = closes.reduce((sum, p) => sum + p, 0) / closes.length;
-        const variance = closes.reduce((sum, p) => sum + Math.pow(p - mean, 2), 0) / closes.length;
-        const std = Math.sqrt(variance);
-        const lowPrice = mean - 2 * std;
-        const highPrice = mean + 2 * std;
-        const trs = [];
-        for (let i = 1; i < highs.length; i++) {
-            const tr = Math.max(
-                highs[i] - lows[i],
-                Math.abs(highs[i] - closes[i - 1]),
-                Math.abs(lows[i] - closes[i - 1])
-            );
-            trs.push(tr);
-        }
-        const atr = trs.reduce((sum, v) => sum + v, 0) / trs.length;
-        const numGrids = (highPrice - lowPrice) / atr;
-        const resultadosDiv = document.getElementById('resultados');
-        let puntosHTML = `
-            <div id="puntosEntradaResult" style="padding:10px; background:#f0f0f0; margin-top:20px;">
-                <h2>Puntos de Entrada</h2>
-                <p>Entrada Long (Compra): ${lowPrice.toFixed(8)}</p>
-                <p>Entrada Short (Venta): ${highPrice.toFixed(8)}</p>
-            </div>
-        `;
-        const existing = document.getElementById('puntosEntradaResult');
-        if (existing) existing.remove();
-        resultadosDiv.insertAdjacentHTML('beforeend', puntosHTML);
-        ocultarCargando();
-    } catch (error) {
-        ocultarCargando();
-        mostrarError(`Error al calcular puntos de entrada: ${error.message}`);
-    }
-});
         });
     </script>
 </body>

@@ -199,7 +199,9 @@
             <tbody></tbody>
         </table>
     </div>
-    <div id="resumenContainer" style="display:none; padding:10px; background:#f0f0f0; margin-top:20px;"></div>
+    <div id="resumenContainer" style="display:none; padding:10px; background:#f0f0f0; margin-top:20px;">
+        <div id="resumen"></div>
+    </div>
     <script>
         const VERSION = '1.1.1';
         let currentUser = 'gustavojavier7';
@@ -243,6 +245,7 @@
             const parSelect = document.getElementById('parSelect');
             const actionSelect = document.getElementById('actionSelect');
             const intervalSelect = document.getElementById('intervalSelect');
+            const intervalContainer = document.getElementById('intervalContainer');
             const consultaForm = document.getElementById('consultaForm');
             const dataTable = document.getElementById('dataTable').getElementsByTagName('tbody')[0];
             const cargandoDatos = document.getElementById('cargandoDatos');
@@ -750,8 +753,15 @@
                     alert('No hay datos de velas para analizar.');
                     return;
                 }
-
+                resumenDiv.innerHTML = `
+                    <div id="resumen"></div>
+                    <div style="margin-top:10px;">
+                        <label><input type="radio" name="periodo" value="14" checked>14</label>
+                        <label><input type="radio" name="periodo" value="21">21</label>
+                        <button id="recalcularResumen">Recalcular</button>
+                    </div>
                 `;
+                resumenDiv.style.display = 'block';
                 mostrarResumen(14);
                 resumenDiv.querySelector('#recalcularResumen').addEventListener('click', () => {
                     const periodo = parseInt(resumenDiv.querySelector('input[name="periodo"]:checked').value);

@@ -750,20 +750,7 @@
                     alert('No hay datos de velas para analizar.');
                     return;
                 }
-                dataTable.parentElement.style.display = 'none';
-                resumenDiv.style.display = 'block';
-                resumenDiv.innerHTML = `
-                    <h1>Resumen Ejecutivo</h1>
-                    <form id="formMetricas">
-                        <h2>Selecciona el periodo</h2>
-                        <label><input type="radio" name="periodo" value="14" checked> 14</label>
-                        <label><input type="radio" name="periodo" value="39"> 39</label>
-                        <label><input type="radio" name="periodo" value="60"> 60</label>
-                        <label><input type="radio" name="periodo" value="100"> 100</label>
-                        <label><input type="radio" name="periodo" value="200"> 200</label>
-                        <button type="button" id="recalcularResumen">Recalcular</button>
-                    </form>
-                    <div id="resumen"></div>
+
                 `;
                 mostrarResumen(14);
                 resumenDiv.querySelector('#recalcularResumen').addEventListener('click', () => {

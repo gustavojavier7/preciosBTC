@@ -708,11 +708,11 @@
                 const high = parseFloat(ultimaVela[2]);
                 const low = parseFloat(ultimaVela[3]);
                 const close = parseFloat(ultimaVela[4]);
-                const pivot = ((high + low + close) / 3).toFixed(8);
-                const r1 = ((2 * pivot) - low).toFixed(8);
-                const r2 = (pivot + (high - low)).toFixed(8);
-                const s1 = ((2 * pivot) - high).toFixed(8);
-                const s2 = (pivot - (high - low)).toFixed(8);
+                const pivot = (high + low + close) / 3;
+                const r1 = (2 * pivot) - low;
+                const r2 = pivot + (high - low);
+                const s1 = (2 * pivot) - high;
+                const s2 = pivot - (high - low);
                 let puntos = { long: 'N/A', short: 'N/A' };
                 if (marketSelect.value === 'futures') {
                     const par = parSelect.value;
@@ -737,9 +737,9 @@
                         <p>ATR: ${atr}</p>
                         <p>Volatilidad Relativa: ${volatilidadRelativa}</p>
                         <p>MACD (Params: ${macd.params}): Line ${macd.macd} | Signal ${macd.signal} | Histogram ${macd.histogram}</p>
-                        <p>Punto Pivote: ${pivot}</p>
-                        <p>Resistencia 1: ${r1} | Resistencia 2: ${r2}</p>
-                        <p>Soporte 1: ${s1} | Soporte 2: ${s2}</p>
+                        <p>Punto Pivote: ${pivot.toFixed(8)}</p>
+                        <p>Resistencia 1: ${r1.toFixed(8)} | Resistencia 2: ${r2.toFixed(8)}</p>
+                        <p>Soporte 1: ${s1.toFixed(8)} | Soporte 2: ${s2.toFixed(8)}</p>
                         <h2>Puntos de Entrada</h2>
                         <p>Entrada Long (Compra): ${puntos.long}</p>
                         <p>Entrada Short (Venta): ${puntos.short}</p>

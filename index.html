@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Reporte de Criptomonedas v1.1.1</title>
+    <style>
+        body {
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .selector {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            overflow: hidden;
+            background-color: #fff;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: center;
+            cursor: pointer;
+        }
+        th {
+            background-color: #f2f2f2;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            font-weight: 600;
+        }
+        tbody tr:nth-child(odd) {
+            background-color: #f9f9f9;
+        }
+        tbody tr:hover {
+            background-color: #f1f1f1;
+        }
+        @media (max-width: 768px) {
+            table {
+                display: block;
+                overflow-x: auto;
+                white-space: nowrap;
+            }
+            th, td {
+                min-width: 100px;
+                padding: 8px;
+            }
+        }
+        th:nth-child(1), td:nth-child(1) { width: 10%; }
+        th:nth-child(2), td:nth-child(2) { width: 10%; }
+        th:nth-child(3), td:nth-child(3) { width: 10%; }
+        th:nth-child(4), td:nth-child(4) { width: 10%; }
+        th:nth-child(5), td:nth-child(5) { width: 10%; }
+        th:nth-child(6), td:nth-child(6) { width: 10%; }
+        th:nth-child(7), td:nth-child(7) { width: 10%; }
+        th:nth-child(8), td:nth-child(8) { width: 10%; }
+        th:nth-child(9), td:nth-child(9) { width: 10%; }
+        #cargandoDatos {
+            font-weight: bold;
+            color: red;
+            display: none;
+        }
+        #error {
+            font-weight: bold;
+            color: red;
+            display: none;
+        }
+        .header-info {
+            padding: 10px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #ddd;
+        }
+        .user-info {
+            display: flex;
+            gap: 20px;
+            font-size: 0.9em;
+            color: #666;
+        }
+        .user-info p {
+            margin: 5px 0;
+        }
+        #resultados {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+        #dataTable {
+            width: 100%;
+        }
+        #progresoPorcentual, #totalPares {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="header-info">
+        <h1 id="tituloReporte">Reporte de Criptomonedas v1.1.1</h1>
+        <div class="user-info">
+            <p>Usuario: <span id="currentUser"></span></p>
+            <p>Fecha y Hora (UTC): <span id="currentDateTime"></span></p>
+        </div>
+    </div>
+
+    <p id="cargandoDatos">Cargando datos...</p>
+    <p id="error">Error al cargar los datos. Por favor, inténtalo de nuevo más tarde.</p>
+
+    <form class="selector" id="consultaForm">
+        <input type="text" id="filtro" placeholder="Filtrar..." autocomplete="off">
+        <select id="parSelect"></select>
+        <select id="accionSelect">
+            <option value="tickers">Precios (SPOT)</option>
+            <option value="klines">Velas (SPOT)</option>
+            <option value="market">Datos de Mercado (SPOT)</option>
+            <option value="tickers_futuros">Precios (FUTUROS)</option>
+            <option value="klines_futuros">Velas (FUTUROS)</option>
+            <option value="market_futuros">Datos de Mercado (FUTUROS)</option>
+            <option value="open_interest">Interés Abierto Actual (FUTUROS)</option>
+            <option value="open_interest_history">Historial de Interés Abierto (FUTUROS)</option>
+        </select>
+        <select id="intervaloSelect" style="display: none;">
+            <option value="1m">1 minuto</option>
+            <option value="3m">3 minutos</option>
+            <option value="5m">5 minutos</option>
+            <option value="15m">15 minutos</option>
+            <option value="30m">30 minutos</option>
+            <option value="1h" selected>1 hora</option>
+            <option value="2h">2 horas</option>
+            <option value="4h">4 horas</option>
+            <option value="6h">6 horas</option>
+            <option value="8h">8 horas</option>
+            <option value="12h">12 horas</option>
+            <option value="1d">1 día</option>
+            <option value="3d">3 días</option>
+            <option value="1w">1 semana</option>
+            <option value="1M">1 mes</option>
+        </select>
+        <button type="submit">Consultar</button>
+        <button type="button" id="buscarMaximos" style="display: none;">Buscar Pares en Máximos</button>
+        <button type="button" id="exportarCSV">Exportar a CSV</button> <!-- Botón añadido -->
+    </form>
+
+    <div id="resultados">
+        <p id="progresoPorcentual">0%</p>
+        <p id="totalPares">Total de pares procesados: 0, Total de pares válidos: 0</p>
+        <table id="dataTable">
+            <thead>
+                <tr>
+                    <th>Par</th>
+                    <th>Precio de Apertura</th>
+                    <th>Precio Máximo</th>
+                    <th>Precio Mínimo</th>
+                    <th>Precio de Cierre</th>
+                    <th>Volumen</th>
+                    <th>Número de Operaciones</th>
+                    <th>Variación Porcentual</th>
+                    <th>Timestamp</th>
+                    <th>Orden</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <script>
+        const VERSION = '1.1.1';
+        let currentUser = 'gustavojavier7';
+        let currentDateTime = new Date().toISOString().replace('T', ' ').slice(0, 19);
+
+        const API_ENDPOINTS = {
+            SPOT: {
+                EXCHANGE_INFO: 'https://data-api.binance.vision/api/v3/exchangeInfo',
+                TICKER: 'https://data-api.binance.vision/api/v3/ticker/bookTicker',
+                MARKET: 'https://api.binance.com/api/v3/ticker/24hr',
+                KLINES: 'https://data-api.binance.vision/api/v3/klines'
+            },
+            FUTURES: {
+                EXCHANGE_INFO: 'https://fapi.binance.com/fapi/v1/exchangeInfo',
+                TICKER: 'https://fapi.binance.com/fapi/v1/ticker/bookTicker',
+                MARKET: 'https://fapi.binance.com/fapi/v1/ticker/24hr',
+                KLINES: 'https://fapi.binance.com/fapi/v1/klines',
+                OPEN_INTEREST: 'https://fapi.binance.com/fapi/v1/openInterest',
+                OPEN_INTEREST_HISTORY: 'https://fapi.binance.com/futures/data/openInterestHist'
+            }
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const filtroInput = document.getElementById('filtro');
+            const parSelect = document.getElementById('parSelect');
+            const accionSelect = document.getElementById('accionSelect');
+            const intervaloSelect = document.getElementById('intervaloSelect');
+            const consultaForm = document.getElementById('consultaForm');
+            const dataTable = document.getElementById('dataTable').getElementsByTagName('tbody')[0];
+            const cargandoDatos = document.getElementById('cargandoDatos');
+            const errorMessage = document.getElementById('error');
+            const tituloReporte = document.getElementById('tituloReporte');
+            const progresoPorcentual = document.getElementById('progresoPorcentual');
+            const totalPares = document.getElementById('totalPares');
+            const buscarMaximosButton = document.getElementById('buscarMaximos');
+            const exportarCSVButton = document.getElementById('exportarCSV'); // Nuevo botón
+
+            let spotPares = [];
+            let futurosPares = [];
+            let sortOrder = 1;
+            let sortColumn = null;
+            let isMaximosMode = false;
+
+            document.getElementById('currentUser').textContent = currentUser;
+            document.getElementById('currentDateTime').textContent = currentDateTime;
+
+            function mostrarCargando() {
+                cargandoDatos.style.display = 'block';
+                errorMessage.style.display = 'none';
+            }
+
+            function ocultarCargando() {
+                cargandoDatos.style.display = 'none';
+            }
+
+            function mostrarError(mensaje) {
+                errorMessage.textContent = mensaje;
+                errorMessage.style.display = 'block';
+                ocultarCargando();
+            }
+
+            function generarCodigoUnico() {
+                const ahora = new Date();
+                const timestamp = ahora.getTime();
+                const codigo = timestamp.toString().padStart(16, '0');
+                return `${codigo.slice(0, 4)}-${codigo.slice(4, 8)}-${codigo.slice(8, 12)}-${codigo.slice(12, 16)}`;
+            }
+
+            function formatearTituloReporte(tipoReporte, par, timeframe, codigoUnico, accion = '') {
+                let titulo;
+                if (accion && (accion === 'klines' || accion === 'klines_futuros')) {
+                    titulo = `${par}${timeframe ? `_${timeframe}` : ''}_${codigoUnico}`;
+                } else {
+                    titulo = `${tipoReporte}`;
+                    if (par && accion !== 'market' && accion !== 'market_futuros') titulo += `+${par}`;
+                    if (timeframe && (accion === 'klines' || accion === 'klines_futuros')) titulo += `+${timeframe}`;
+                    if (codigoUnico) titulo += `+${codigoUnico}`;
+                    titulo += `+${currentUser}`;
+                }
+                return titulo.replace(/ /g, '_');
+            }
+
+            function actualizarTitulo(tipoReporte, par, timeframe, codigoUnico, accion) {
+                const nuevoTitulo = formatearTituloReporte(tipoReporte, par, timeframe, codigoUnico, accion);
+                document.getElementById('tituloReporte').textContent = nuevoTitulo;
+                document.title = nuevoTitulo;
+            }
+
+            consultaForm.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                const nuevoCodigoUnico = generarCodigoUnico();
+                currentDateTime = new Date().toISOString().replace('T', ' ').slice(0, 19);
+                document.getElementById('currentDateTime').textContent = currentDateTime;
+
+                mostrarCargando();
+                dataTable.innerHTML = '';
+                isMaximosMode = false;
+
+                let par = parSelect.value;
+                const accion = accionSelect.value;
+                const intervalo = intervaloSelect.value;
+
+                try {
+                    const tipoReporte = determinarTipoReporte(accion);
+                    const datos = await realizarConsulta(par, accion, intervalo);
+                    procesarDatos(datos, accion, par);
+                    actualizarTitulo(tipoReporte, par, intervalo, nuevoCodigoUnico, accion);
+                    ocultarCargando();
+                } catch (error) {
+                    console.error('Error en la consulta:', error);
+                    mostrarError(`Error: ${error.message}`);
+                }
+            });
+
+            function determinarTipoReporte(accion) {
+                if (accion.includes('klines')) return 'Velas';
+                if (accion.includes('tickers')) return 'Precios';
+                if (accion.includes('market')) return 'Datos de Mercado';
+                if (accion.includes('open_interest')) return 'Interés Abierto';
+                return 'Reporte';
+            }
+
+            function procesarDatos(datos, accion, par) {
+                dataTable.innerHTML = '';
+                let total = Array.isArray(datos) ? datos.length : 1;
+                let progreso = 0;
+                let paresProcesados = 0;
+                let paresValidosCount = 0;
+
+                actualizarEncabezados(accion);
+
+                if (accion === 'market' || accion === 'market_futuros') {
+                    if (!Array.isArray(datos)) datos = [datos];
+                    datos.forEach((dato, index) => {
+                        if (spotPares.includes(dato.symbol) || futurosPares.includes(dato.symbol)) {
+                            paresProcesados++;
+                            paresValidosCount++;
+                            progreso = Math.min(100, Math.round(((index + 1) / total) * 100));
+                            const row = dataTable.insertRow();
+                            row.innerHTML = `
+                                <td>${dato.symbol}</td>
+                                <td>${parseFloat(dato.openPrice).toFixed(8)}</td>
+                                <td>${parseFloat(dato.highPrice).toFixed(8)}</td>
+                                <td>${parseFloat(dato.lowPrice).toFixed(8)}</td>
+                                <td>${parseFloat(dato.lastPrice).toFixed(8)}</td>
+                                <td>${parseFloat(dato.volume).toFixed(8)}</td>
+                                <td>${dato.count}</td>
+                                <td>${parseFloat(dato.priceChangePercent).toFixed(8)}%</td>
+                                <td>${formatearFecha(dato.closeTime)}</td>
+                                <td>${index + 1}</td>
+                            `;
+                        }
+                        progresoPorcentual.textContent = `${progreso}%`;
+                        totalPares.textContent = `Total de pares procesados: ${paresProcesados}, Total de pares válidos: ${paresValidosCount}`;
+                    });
+                } else if (accion === 'tickers' || accion === 'tickers_futuros') {
+                    const row = dataTable.insertRow();
+                    row.innerHTML = `
+                        <td>${datos.symbol}</td>
+                        <td>${parseFloat(datos.bidPrice).toFixed(8)}</td>
+                        <td>${parseFloat(datos.askPrice).toFixed(8)}</td>
+                    `;
+                    progresoPorcentual.textContent = '100%';
+                    totalPares.textContent = `Total de pares procesados: 1, Total de pares válidos: 1`;
+                } else if (accion === 'klines' || accion === 'klines_futuros') {
+                    datos.reverse().forEach((vela, index) => {
+                        paresProcesados++;
+                        paresValidosCount++;
+                        progreso = Math.min(100, Math.round(((index + 1) / total) * 100));
+                        const precioApertura = parseFloat(vela[1]);
+                        const precioCierre = parseFloat(vela[4]);
+                        const variacionPorcentual = ((precioCierre - precioApertura) / precioApertura) * 100;
+                        const row = dataTable.insertRow();
+                        row.innerHTML = `
+                            <td>${par}</td>
+                            <td>${precioApertura.toFixed(8)}</td>
+                            <td>${parseFloat(vela[2]).toFixed(8)}</td>
+                            <td>${parseFloat(vela[3]).toFixed(8)}</td>
+                            <td>${precioCierre.toFixed(8)}</td>
+                            <td>${parseFloat(vela[5]).toFixed(8)}</td>
+                            <td>${vela[8]}</td>
+                            <td>${variacionPorcentual.toFixed(8)}%</td>
+                            <td>${formatearFecha(vela[0])}</td>
+                            <td>${index + 1}</td>
+                        `;
+                        progresoPorcentual.textContent = `${progreso}%`;
+                        totalPares.textContent = `Total de pares procesados: ${paresProcesados}, Total de pares válidos: ${paresValidosCount}`;
+                    });
+                } else if (accion === 'open_interest') {
+                    const row = dataTable.insertRow();
+                    row.innerHTML = `
+                        <td>${datos.symbol}</td>
+                        <td>${parseFloat(datos.openInterest).toFixed(8)}</td>
+                        <td>${formatearFecha(datos.time)}</td>
+                    `;
+                    progresoPorcentual.textContent = '100%';
+                    totalPares.textContent = `Total de pares procesados: 1, Total de pares válidos: 1`;
+                } else if (accion === 'open_interest_history') {
+                    datos.forEach((dato, index) => {
+                        const row = dataTable.insertRow();
+                        row.innerHTML = `
+                            <td>${dato.symbol}</td>
+                            <td>${parseFloat(dato.sumOpenInterest).toFixed(8)}</td>
+                            <td>${parseFloat(dato.sumOpenInterestValue).toFixed(8)}</td>
+                            <td>${formatearFecha(dato.timestamp)}</td>
+                            <td>${index + 1}</td>
+                        `;
+                        progresoPorcentual.textContent = '100%';
+                        totalPares.textContent = `Total de pares procesados: ${datos.length}, Total de pares válidos: ${datos.length}`;
+                    });
+                }
+            }
+
+            async function realizarConsulta(par, accion, intervalo) {
+                let url;
+                if (!par && accion !== 'market' && accion !== 'market_futuros') {
+                    throw new Error('Debe seleccionar un par antes de consultar.');
+                }
+                if (par && par.endsWith('.P')) {
+                    par = par.slice(0, -2);
+                }
+                if (par && (accion === 'tickers' || accion === 'klines' || accion === 'market') && !spotPares.includes(par)) {
+                    throw new Error('El par seleccionado no está disponible en el mercado SPOT.');
+                }
+                if (par && (accion === 'tickers_futuros' || accion === 'klines_futuros' || accion === 'market_futuros' ||
+                    accion === 'open_interest' || accion === 'open_interest_history') && !futurosPares.includes(par)) {
+                    throw new Error('El par seleccionado no está disponible en el mercado de Futuros perpetuos.');
+                }
+                switch (accion) {
+                    case 'market':
+                        url = API_ENDPOINTS.SPOT.MARKET;
+                        break;
+                    case 'market_futuros':
+                        url = API_ENDPOINTS.FUTURES.MARKET;
+                        break;
+                    case 'open_interest':
+                        url = `${API_ENDPOINTS.FUTURES.OPEN_INTEREST}?symbol=${par}`;
+                        break;
+                    case 'open_interest_history':
+                        url = `${API_ENDPOINTS.FUTURES.OPEN_INTEREST_HISTORY}?symbol=${par}&period=1d`;
+                        break;
+                    case 'tickers':
+                        url = `${API_ENDPOINTS.SPOT.TICKER}?symbol=${par}`;
+                        break;
+                    case 'tickers_futuros':
+                        url = `${API_ENDPOINTS.FUTURES.TICKER}?symbol=${par}`;
+                        break;
+                    case 'klines':
+                        url = `${API_ENDPOINTS.SPOT.KLINES}?symbol=${par}&interval=${intervalo}&limit=1000`;
+                        break;
+                    case 'klines_futuros':
+                        url = `${API_ENDPOINTS.FUTURES.KLINES}?symbol=${par}&interval=${intervalo}&limit=1000`;
+                        break;
+                    default:
+                        throw new Error('Tipo de acción no válida');
+                }
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error('Error al conectar con la API');
+                }
+                return await response.json();
+            }
+
+            function actualizarEncabezados(accion) {
+                const thead = document.getElementById('dataTable').getElementsByTagName('thead')[0];
+                thead.innerHTML = '';
+                const row = thead.insertRow();
+                const crearEncabezado = (texto, index) => {
+                    return `<th onclick="sortTable(${index})">${texto} <span class="sort-icon" data-column="${index}">▴▾</span></th>`;
+                };
+                if (accion === 'market' || accion === 'market_futuros') {
+                    row.innerHTML = `
+                        ${crearEncabezado('Par', 0)}
+                        ${crearEncabezado('Precio de Apertura', 1)}
+                        ${crearEncabezado('Precio Máximo', 2)}
+                        ${crearEncabezado('Precio Mínimo', 3)}
+                        ${crearEncabezado('Precio de Cierre', 4)}
+                        ${crearEncabezado('Volumen', 5)}
+                        ${crearEncabezado('Número de Operaciones', 6)}
+                        ${crearEncabezado('Variación Porcentual', 7)}
+                        ${crearEncabezado('Timestamp', 8)}
+                        ${crearEncabezado('Orden', 9)}
+                    `;
+                } else if (accion === 'tickers' || accion === 'tickers_futuros') {
+                    row.innerHTML = `
+                        ${crearEncabezado('Par', 0)}
+                        ${crearEncabezado('Precio de Compra', 1)}
+                        ${crearEncabezado('Precio de Venta', 2)}
+                    `;
+                } else if (accion === 'klines' || accion === 'klines_futuros') {
+                    row.innerHTML = `
+                        ${crearEncabezado('Par', 0)}
+                        ${crearEncabezado('Precio de Apertura', 1)}
+                        ${crearEncabezado('Precio Máximo', 2)}
+                        ${crearEncabezado('Precio Mínimo', 3)}
+                        ${crearEncabezado('Precio de Cierre', 4)}
+                        ${crearEncabezado('Volumen', 5)}
+                        ${crearEncabezado('Número de Operaciones', 6)}
+                        ${crearEncabezado('Variación Porcentual', 7)}
+                        ${crearEncabezado('Timestamp', 8)}
+                        ${crearEncabezado('Orden', 9)}
+                    `;
+                } else if (accion === 'open_interest') {
+                    row.innerHTML = `
+                        ${crearEncabezado('Par', 0)}
+                        ${crearEncabezado('Interés Abierto', 1)}
+                        ${crearEncabezado('Timestamp', 2)}
+                    `;
+                } else if (accion === 'open_interest_history') {
+                    row.innerHTML = `
+                        ${crearEncabezado('Par', 0)}
+                        ${crearEncabezado('Suma de Interés Abierto', 1)}
+                        ${crearEncabezado('Valor de Interés Abierto', 2)}
+                        ${crearEncabezado('Timestamp', 3)}
+                    `;
+                }
+            }
+
+            function formatearFecha(timestamp) {
+                const fecha = new Date(timestamp);
+                const dia = String(fecha.getDate()).padStart(2, '0');
+                const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+                const anio = fecha.getFullYear();
+                const horas = String(fecha.getHours()).padStart(2, '0');
+                const minutos = String(fecha.getMinutes()).padStart(2, '0');
+                const segundos = String(fecha.getSeconds()).padStart(2, '0');
+                return `${dia}-${mes}-${anio} ${horas}:${minutos}:${segundos}`;
+            }
+
+            // Nueva función para exportar a CSV
+            function exportarTablaCSV() {
+                const table = document.getElementById('dataTable');
+                const rows = Array.from(table.querySelectorAll('tr'));
+                let csvContent = '';
+
+                rows.forEach((row, index) => {
+                    const cells = Array.from(row.querySelectorAll('th, td'));
+                    const rowData = cells.map(cell => {
+                        let text = cell.textContent.trim();
+                        // Eliminar íconos de ordenación de los encabezados
+                        if (index === 0) text = text.replace(' ▴▾', '');
+                        return `"${text.replace(/"/g, '""')}"`;
+                    }).join(',');
+                    csvContent += rowData + '\n';
+                });
+
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                const tituloReporte = document.getElementById('tituloReporte').textContent.replace(/ /g, '_');
+                const url = URL.createObjectURL(blob);
+                link.setAttribute('href', url);
+                link.setAttribute('download', `${tituloReporte}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+
+            const codigoUnico = generarCodigoUnico();
+            actualizarTitulo('Reporte', '', '', codigoUnico);
+
+            mostrarCargando();
+            Promise.all([
+                fetch(API_ENDPOINTS.SPOT.EXCHANGE_INFO),
+                fetch(API_ENDPOINTS.FUTURES.EXCHANGE_INFO)
+            ])
+            .then(responses => Promise.all(responses.map(response => {
+                if (!response.ok) throw new Error('Error al conectar con la API');
+                return response.json();
+            })))
+            .then(data => {
+                spotPares = data[0].symbols.filter(symbol => symbol.status === 'TRADING').map(symbol => symbol.symbol);
+                futurosPares = data[1].symbols.filter(symbol => symbol.status === 'TRADING' && symbol.contractType === 'PERPETUAL').map(symbol => symbol.symbol);
+                const paresValidos = [
+                    ...spotPares.map(par => ({ par, mercado: 'SPOT' })),
+                    ...futurosPares.map(par => ({ par: `${par}.P`, mercado: 'FUTUROS' }))
+                ];
+                paresValidos.forEach(({ par, mercado }) => {
+                    const option = document.createElement('option');
+                    option.value = par;
+                    option.textContent = `${par} (${mercado})`;
+                    parSelect.appendChild(option);
+                });
+                ocultarCargando();
+            })
+            .catch(error => {
+                console.error('Error al obtener los pares disponibles:', error);
+                mostrarError(`Error al conectar con la API: ${error.message}`);
+            });
+
+            filtroInput.addEventListener('input', () => {
+                const filtro = filtroInput.value.toUpperCase();
+                Array.from(parSelect.options).forEach(option => {
+                    option.style.display = option.value.includes(filtro) ? 'block' : 'none';
+                });
+            });
+
+            accionSelect.addEventListener('change', () => {
+                intervaloSelect.style.display = accionSelect.value === 'klines' || accionSelect.value === 'klines_futuros' ? 'inline-block' : 'none';
+                parSelect.disabled = accionSelect.value === 'market' || accionSelect.value === 'market_futuros';
+                buscarMaximosButton.style.display = accionSelect.value === 'market_futuros' ? 'inline-block' : 'none';
+            });
+            accionSelect.dispatchEvent(new Event('change'));
+
+            buscarMaximosButton.addEventListener('click', () => {
+                const rows = Array.from(dataTable.getElementsByTagName('tr'));
+                rows.sort((a, b) => {
+                    const precioCierreA = parseFloat(a.getElementsByTagName('td')[4].textContent);
+                    const precioMaximoA = parseFloat(a.getElementsByTagName('td')[2].textContent);
+                    const precioCierreB = parseFloat(b.getElementsByTagName('td')[4].textContent);
+                    const precioMaximoB = parseFloat(b.getElementsByTagName('td')[2].textContent);
+                    const cercaniaA = (precioCierreA / precioMaximoA) * 100;
+                    const cercaniaB = (precioCierreB / precioMaximoB) * 100;
+                    return cercaniaB - cercaniaA;
+                });
+                rows.forEach(row => {
+                    const precioCierre = parseFloat(row.getElementsByTagName('td')[4].textContent);
+                    const precioMaximo = parseFloat(row.getElementsByTagName('td')[2].textContent);
+                    const cercania = (precioCierre / precioMaximo) * 100;
+                    row.getElementsByTagName('td')[7].textContent = `${cercania.toFixed(8)}%`;
+                    dataTable.appendChild(row);
+                });
+                isMaximosMode = true;
+                actualizarEncabezados(accionSelect.value);
+            });
+
+            window.sortTable = function(columnIndex) {
+                const table = document.getElementById('dataTable');
+                const tbody = table.getElementsByTagName('tbody')[0];
+                const rows = Array.from(tbody.getElementsByTagName('tr'));
+
+                if (sortColumn === columnIndex) {
+                    sortOrder *= -1;
+                } else {
+                    sortColumn = columnIndex;
+                    sortOrder = 1;
+                }
+
+                rows.sort((a, b) => {
+                    const aText = a.getElementsByTagName('td')[columnIndex].textContent.trim();
+                    const bText = b.getElementsByTagName('td')[columnIndex].textContent.trim();
+                    return sortOrder * aText.localeCompare(bText, undefined, { numeric: true });
+                });
+
+                rows.forEach(row => tbody.appendChild(row));
+            };
+
+            // Evento para exportar a CSV
+            exportarCSVButton.addEventListener('click', () => {
+                if (dataTable.rows.length === 0) {
+                    alert('No hay datos para exportar. Por favor, realiza una consulta primero.');
+                    return;
+                }
+                exportarTablaCSV();
+            });
+        });
+    </script>
+</body>
+</html>

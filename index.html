@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Reporte de Criptomonedas v1.1.1</title>
+    <title>Reporte de Criptomonedas v1.1.2</title>
     <style>
         body {
             margin: 0;
@@ -116,7 +116,7 @@
 </head>
 <body>
     <div class="header-info">
-        <h1 id="tituloReporte">Reporte de Criptomonedas v1.1.1</h1>
+        <h1 id="tituloReporte">Reporte de Criptomonedas v1.1.2</h1>
         <div class="user-info">
             <p>Usuario: <span id="currentUser"></span></p>
             <p>Fecha y Hora (UTC): <span id="currentDateTime"></span></p>
@@ -176,6 +176,7 @@
             <button type="button" id="buscarMaximos" style="display:none;">Buscar Pares en Máximos</button>
             <button type="button" id="exportarCSV">Exportar CSV</button>
             <button type="button" id="calcularResumen" style="display:none;">Calcular Métricas y Puntos de Entrada</button>
+            <button type="button" id="toggleTabla" style="display:none;">Ver tabla de velas</button>
         </fieldset>
     </form>
     <div id="resultados">
@@ -203,7 +204,10 @@
         <div id="resumen"></div>
     </div>
     <script>
-        const VERSION = '1.1.1';
+        const VERSION = '1.1.2';
+        // CHANGELOG v1.1.2 (2025-MM-DD): Ocultar tabla #resultados al generar resumen.
+        // Añadir un botón “Ver tabla de velas” para alternar visibilidad.
+        // Añadir periodos 39, 60, 100, 200 a la elección de métricas.
         let currentUser = 'gustavojavier7';
         let currentDateTime = new Date().toISOString().replace('T', ' ').slice(0, 19);
         const API_ENDPOINTS = {
@@ -257,6 +261,7 @@
             const buscarMaximosButton = document.getElementById('buscarMaximos');
             const exportarCSVButton = document.getElementById('exportarCSV');
             const calcularResumenButton = document.getElementById('calcularResumen');
+            const toggleTablaButton = document.getElementById('toggleTabla');
             let spotPares = [];
             let futurosPares = [];
             let sortOrder = 1;
@@ -319,6 +324,8 @@
                     actualizarTitulo(tipoReporte, par, intervalo, nuevoCodigoUnico, action);
                     ocultarCargando();
                     calcularResumenButton.style.display = action === 'candles' ? 'inline-block' : 'none';
+                    toggleTablaButton.style.display = 'none';
+                    resultadosDiv.style.display = 'block';
                 } catch (error) {
                     console.error('Error en la consulta:', error);
                     mostrarError(`Error: ${error.message}`);
@@ -757,6 +764,8 @@
 
                 // Ocultar tabla y progresos
                 resultadosDiv.style.display = 'none';
+                toggleTablaButton.style.display = 'inline-block';
+                toggleTablaButton.textContent = 'Ver tabla de velas';
 
                 // Mostrar resumen
                 resumenDiv.innerHTML = `
@@ -764,6 +773,10 @@
                     <div style="margin-top:10px;">
                         <label><input type="radio" name="periodo" value="14" checked>14</label>
                         <label><input type="radio" name="periodo" value="21">21</label>
+                        <label><input type="radio" name="periodo" value="39">39</label>
+                        <label><input type="radio" name="periodo" value="60">60</label>
+                        <label><input type="radio" name="periodo" value="100">100</label>
+                        <label><input type="radio" name="periodo" value="200">200</label>
                         <button id="recalcularResumen">Recalcular</button>
                     </div>
                 `;
@@ -773,6 +786,16 @@
                     const periodo = parseInt(resumenDiv.querySelector('input[name="periodo"]:checked').value);
                     mostrarResumen(periodo);
                 });
+            });
+
+            toggleTablaButton.addEventListener('click', () => {
+                if (resultadosDiv.style.display === 'none') {
+                    resultadosDiv.style.display = 'block';
+                    toggleTablaButton.textContent = 'Ocultar tabla de velas';
+                } else {
+                    resultadosDiv.style.display = 'none';
+                    toggleTablaButton.textContent = 'Ver tabla de velas';
+                }
             });
         });
     </script>

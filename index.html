@@ -757,7 +757,7 @@
                                     // Asumiendo datosRaw no es 1d, recalcular con fetch
                                     fetch(\`https://fapi.binance.com/fapi/v1/klines?symbol=${par}&interval=1d&limit=14\`)
                                     .then(res => res.json())
-                                    .then(datos14d => {
+                                    .then(datos14 => {
                                         const closes14 = datos14.map(vela => parseFloat(vela[4]));
                                         const highs14 = datos14.map(vela => parseFloat(vela[2]));
                                         const lows14 = datos14.map(vela => parseFloat(vela[3]));
@@ -793,7 +793,7 @@
                             });
                             // Calcular inicial con 14
                             mostrarResumen(14);
-                        </script>
+                        <\/script>
                     </body>
                     </html>
                 `;

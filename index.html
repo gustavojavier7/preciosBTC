@@ -253,6 +253,7 @@
             const tituloReporte = document.getElementById('tituloReporte');
             const progresoPorcentual = document.getElementById('progresoPorcentual');
             const totalPares = document.getElementById('totalPares');
+            const resultadosDiv = document.getElementById('resultados');
             const buscarMaximosButton = document.getElementById('buscarMaximos');
             const exportarCSVButton = document.getElementById('exportarCSV');
             const calcularResumenButton = document.getElementById('calcularResumen');
@@ -753,6 +754,11 @@
                     alert('No hay datos de velas para analizar.');
                     return;
                 }
+
+                // Ocultar tabla y progresos
+                resultadosDiv.style.display = 'none';
+
+                // Mostrar resumen
                 resumenDiv.innerHTML = `
                     <div id="resumen"></div>
                     <div style="margin-top:10px;">

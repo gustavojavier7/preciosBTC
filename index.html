@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Reporte de Criptomonedas v1.1.2</title>
+    <title>Reporte de Criptomonedas v1.1.3</title>
     <style>
         body {
             margin: 0;
@@ -116,7 +116,7 @@
 </head>
 <body>
     <div class="header-info">
-        <h1 id="tituloReporte">Reporte de Criptomonedas v1.1.2</h1>
+        <h1 id="tituloReporte">Reporte de Criptomonedas v1.1.3</h1>
         <div class="user-info">
             <p>Usuario: <span id="currentUser"></span></p>
             <p>Fecha y Hora (UTC): <span id="currentDateTime"></span></p>
@@ -204,10 +204,9 @@
         <div id="resumen"></div>
     </div>
     <script>
-        const VERSION = '1.1.2';
-        // CHANGELOG v1.1.2 (2025-MM-DD): Ocultar tabla #resultados al generar resumen.
-        // Añadir un botón “Ver tabla de velas” para alternar visibilidad.
-        // Añadir periodos 39, 60, 100, 200 a la elección de métricas.
+        const VERSION = '1.1.3';
+        // CHANGELOG v1.1.3 (2025-08-02): Modificado cálculo de puntos de entrada para usar el timeframe actual en lugar de datos diarios fijos.
+        // Los puntos de entrada ahora se calculan con los mismos datos mostrados en la tabla.
         let currentUser = 'gustavojavier7';
         let currentDateTime = new Date().toISOString().replace('T', ' ').slice(0, 19);
         const API_ENDPOINTS = {
@@ -268,6 +267,7 @@
             let sortColumn = null;
             let isMaximosMode = false;
             let datosRaw = []; // Variable global para almacenar datos de velas
+            let currentTimeframe = '1h'; // Variable para almacenar el timeframe actual
             document.getElementById('currentUser').textContent = currentUser;
             document.getElementById('currentDateTime').textContent = currentDateTime;
             function mostrarCargando() {
@@ -317,6 +317,10 @@
                 let par = parSelect.value;
                 const action = actionSelect.value;
                 const intervalo = intervalSelect.value;
+                
+                // Actualizar el timeframe actual
+                currentTimeframe = intervalo;
+                
                 try {
                     const tipoReporte = determinarTipoReporte(action);
                     const datos = await realizarConsulta(par, action, intervalo);
@@ -720,40 +724,26 @@
                 const r2 = pivot + (high - low);
                 const s1 = (2 * pivot) - high;
                 const s2 = pivot - (high - low);
-                let puntos = { long: 'N/A', short: 'N/A' };
-                if (marketSelect.value === 'futures') {
-                    const par = parSelect.value;
-                    fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${par}&interval=1d&limit=14`)
-                        .then(res => res.json())
-                        .then(datos14 => {
-                            const closes14 = datos14.map(v => parseFloat(v[4]));
-                            const highs14 = datos14.map(v => parseFloat(v[2]));
-                            const lows14 = datos14.map(v => parseFloat(v[3]));
-                            puntos = calcularPuntosEntrada(closes14, highs14, lows14);
-                            actualizarHTML();
-                        })
-                        .catch(err => console.error(err));
-                } else {
-                    actualizarHTML();
-                }
-                function actualizarHTML() {
-                    const html = `
-                        <h2>Métricas (Periodo: ${periodo})</h2>
-                        <p>RSI: ${rsi} (${interpretacionRSI})</p>
-                        <p>EMA: ${ema}</p>
-                        <p>ATR: ${atr}</p>
-                        <p>Volatilidad Relativa: ${volatilidadRelativa}</p>
-                        <p>MACD (Params: ${macd.params}): Line ${macd.macd} | Signal ${macd.signal} | Histogram ${macd.histogram}</p>
-                        <p>Punto Pivote: ${pivot.toFixed(8)}</p>
-                        <p>Resistencia 1: ${r1.toFixed(8)} | Resistencia 2: ${r2.toFixed(8)}</p>
-                        <p>Soporte 1: ${s1.toFixed(8)} | Soporte 2: ${s2.toFixed(8)}</p>
-                        <h2>Puntos de Entrada</h2>
-                        <p>Entrada Long (Compra): ${puntos.long}</p>
-                        <p>Entrada Short (Venta): ${puntos.short}</p>
-                    `;
-                    document.getElementById('resumen').innerHTML = html;
-                }
-                actualizarHTML();
+                
+                // Calcular puntos de entrada usando los datos actuales del timeframe seleccionado
+                const puntos = calcularPuntosEntrada(closes, highs, lows);
+                
+                const html = `
+                    <h2>Métricas (Periodo: ${periodo}) - Timeframe: ${currentTimeframe}</h2>
+                    <p>RSI: ${rsi} (${interpretacionRSI})</p>
+                    <p>EMA: ${ema}</p>
+                    <p>ATR: ${atr}</p>
+                    <p>Volatilidad Relativa: ${volatilidadRelativa}</p>
+                    <p>MACD (Params: ${macd.params}): Line ${macd.macd} | Signal ${macd.signal} | Histogram ${macd.histogram}</p>
+                    <p>Punto Pivote: ${pivot.toFixed(8)}</p>
+                    <p>Resistencia 1: ${r1.toFixed(8)} | Resistencia 2: ${r2.toFixed(8)}</p>
+                    <p>Soporte 1: ${s1.toFixed(8)} | Soporte 2: ${s2.toFixed(8)}</p>
+                    <h2>Puntos de Entrada (basados en timeframe ${currentTimeframe})</h2>
+                    <p>Entrada Long (Compra): ${puntos.long}</p>
+                    <p>Entrada Short (Venta): ${puntos.short}</p>
+                    <p><em>Nota: Los puntos de entrada se calculan usando desviación estándar (±2σ) sobre los datos del timeframe actual.</em></p>
+                `;
+                document.getElementById('resumen').innerHTML = html;
             }
             const resumenDiv = document.getElementById('resumenContainer');
             calcularResumenButton.addEventListener('click', () => {

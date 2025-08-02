@@ -261,6 +261,7 @@
             const exportarCSVButton = document.getElementById('exportarCSV');
             const calcularResumenButton = document.getElementById('calcularResumen');
             const toggleTablaButton = document.getElementById('toggleTabla');
+            const resumenDiv = document.getElementById('resumenContainer');
             let spotPares = [];
             let futurosPares = [];
             let sortOrder = 1;
@@ -311,6 +312,12 @@
                 const nuevoCodigoUnico = generarCodigoUnico();
                 currentDateTime = new Date().toISOString().replace('T', ' ').slice(0, 19);
                 document.getElementById('currentDateTime').textContent = currentDateTime;
+                // Reset visual state
+                resumenDiv.style.display = 'none';
+                resumenDiv.innerHTML = '';
+                resultadosDiv.style.display = 'block';
+                toggleTablaButton.style.display = 'none';
+                toggleTablaButton.textContent = 'Ver tabla de velas';
                 mostrarCargando();
                 dataTable.innerHTML = '';
                 isMaximosMode = false;
@@ -745,7 +752,6 @@
                 `;
                 document.getElementById('resumen').innerHTML = html;
             }
-            const resumenDiv = document.getElementById('resumenContainer');
             calcularResumenButton.addEventListener('click', () => {
                 if (datosRaw.length === 0) {
                     alert('No hay datos de velas para analizar.');

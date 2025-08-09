@@ -269,6 +269,26 @@
             let isMaximosMode = false;
             let datosRaw = []; // Variable global para almacenar datos de velas
             let currentTimeframe = '1h'; // Variable para almacenar el timeframe actual
+            const lastPrices = {};
+            const lastColors = {};
+
+            function actualizarColorPrecio(cell, key, nuevoPrecio) {
+                const precioAnterior = lastPrices[key];
+                if (precioAnterior !== undefined) {
+                    if (nuevoPrecio > precioAnterior) {
+                        cell.style.color = 'green';
+                        lastColors[key] = 'green';
+                    } else if (nuevoPrecio < precioAnterior) {
+                        cell.style.color = 'red';
+                        lastColors[key] = 'red';
+                    } else {
+                        cell.style.color = lastColors[key] || '';
+                    }
+                } else {
+                    cell.style.color = lastColors[key] || '';
+                }
+                lastPrices[key] = nuevoPrecio;
+            }
             document.getElementById('currentUser').textContent = currentUser;
             document.getElementById('currentDateTime').textContent = currentDateTime;
             function mostrarCargando() {
@@ -371,7 +391,7 @@
                             paresValidosCount++;
                             progreso = Math.min(100, Math.round(((index + 1) / total) * 100));
                             const row = dataTable.insertRow();
-                            row.innerHTML = `
+                              row.innerHTML = `
                                 <td>${dato.symbol}</td>
                                 <td>${parseFloat(dato.openPrice).toFixed(8)}</td>
                                 <td>${parseFloat(dato.highPrice).toFixed(8)}</td>
@@ -382,21 +402,25 @@
                                 <td>${parseFloat(dato.priceChangePercent).toFixed(8)}%</td>
                                 <td>${formatearFecha(dato.closeTime)}</td>
                                 <td>${index + 1}</td>
-                            `;
-                        }
-                        progresoPorcentual.textContent = `${progreso}%`;
-                        totalPares.textContent = `Total de pares procesados: ${paresProcesados}, Total de pares válidos: ${paresValidosCount}`;
-                    });
-                } else if (action === 'price') {
-                    const row = dataTable.insertRow();
-                    row.innerHTML = `
-                        <td>${datos.symbol}</td>
-                        <td>${parseFloat(datos.bidPrice).toFixed(8)}</td>
-                        <td>${parseFloat(datos.askPrice).toFixed(8)}</td>
-                    `;
-                    progresoPorcentual.textContent = '100%';
-                    totalPares.textContent = `Total de pares procesados: 1, Total de pares válidos: 1`;
-                } else if (action === 'candles') {
+                              `;
+                              const priceCell = row.cells[4];
+                              actualizarColorPrecio(priceCell, dato.symbol, parseFloat(dato.lastPrice));
+                          }
+                          progresoPorcentual.textContent = `${progreso}%`;
+                          totalPares.textContent = `Total de pares procesados: ${paresProcesados}, Total de pares válidos: ${paresValidosCount}`;
+                      });
+                  } else if (action === 'price') {
+                      const row = dataTable.insertRow();
+                      row.innerHTML = `
+                          <td>${datos.symbol}</td>
+                          <td>${parseFloat(datos.bidPrice).toFixed(8)}</td>
+                          <td>${parseFloat(datos.askPrice).toFixed(8)}</td>
+                      `;
+                      actualizarColorPrecio(row.cells[1], `${datos.symbol}-bid`, parseFloat(datos.bidPrice));
+                      actualizarColorPrecio(row.cells[2], `${datos.symbol}-ask`, parseFloat(datos.askPrice));
+                      progresoPorcentual.textContent = '100%';
+                      totalPares.textContent = `Total de pares procesados: 1, Total de pares válidos: 1`;
+                  } else if (action === 'candles') {
                     datosRaw = datos; // Almacenar datos raw para análisis
                     datos.reverse().forEach((vela, index) => {
                         paresProcesados++;
